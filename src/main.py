@@ -8,3 +8,18 @@ Suggested structure:
 - Prepare input data for a single simulation or multiple simulations.
 - Execute main function when the script is run directly.
 """
+from pathlib import Path
+
+def main():
+    print("✅ Main is running.")
+    data_dir = Path("data")
+    jsons = list(data_dir.rglob("*.json"))
+    if jsons:
+        print("Found JSON files:")
+        for p in jsons:
+            print(" -", p)
+    else:
+        print("No JSON files found under ./data")
+
+if __name__ == "__main__":
+    main()
