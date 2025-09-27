@@ -1,8 +1,8 @@
 {
-  "DER": [
+  "DER": [  
     {
       "DER_id": "PV_01",
-      "DER_type": "PV",
+      "DER_type": "PV", 
       "max_power_kW": 3.0,
       "min_power_ratio": 0.0,
       "max_ramp_rate_up_ratio": 1.0,
