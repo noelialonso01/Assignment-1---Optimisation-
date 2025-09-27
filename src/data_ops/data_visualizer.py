@@ -8,3 +8,4 @@ import plotly
 
 class DataVidualizer:
     """Placeholder for DataVisualizer."""
+    """This will call the plot data function from utils.py"""
