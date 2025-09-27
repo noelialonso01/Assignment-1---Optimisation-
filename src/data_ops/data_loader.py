@@ -15,6 +15,7 @@ import numpy as np
 import yaml
 
 from src.utils.utils import load_dataset
+from src.utils.utils import load_datafile
 
 
 
@@ -34,9 +35,9 @@ class DataLoader:
 
     def __init__(self, input_path: str, question: str = "question_1a"):
         ### These self definitions are establishing the class attributes, not used yet
-        self.input_path = Path(self.input_path).resolve()
-        self.load_aux_data('question1a_scenario1_aux_data.yaml')
-        self.data()
+        self.input_path = Path(input_path).resolve()
+        ###self.load_aux_data('question1a_scenario1_aux_data.yaml')
+        ###self.data()
         """
         Post-initialization to load and validate all required datasets (placeholder function)
 
@@ -53,7 +54,7 @@ class DataLoader:
 
     def _load_dataset(self, question_name: str):
         self.question = question_name
-        raw_data = load_dataset(question_name)
+        raw_data = load_dataset(question_name, self.input_path)
         for key, value in raw_data.items():
             setattr(self, key, pd.DataFrame(value))
 
@@ -63,11 +64,17 @@ class DataLoader:
         call the load_dataset() function from utils.py to load all files in the input_path directory
         save all data as class attributes (e.g. self.demand, self.wind, etc.), structured as pandas DataFrames or Series (or other format as prefered)
         """
-
+        return raw_data
         pass
 
 
     def _load_data_file(self, question_name: str, file_name: str):
+        self.question = question_name
+        self.file_name = file_name
+        raw_data = load_datafile(file_name, question_name, self.input_path)
+        for key, value in raw_data.items():
+            setattr(self, key, pd.DataFrame(value))
+
         """
         Placeholder function 
         Helper function to load a specific CSV or json file, using the appropriate method based on file extension.. Raises FileNotFoundError if missing.
@@ -75,6 +82,7 @@ class DataLoader:
         example usage: 
         define and call a load_data_file() function from utils.py to load a specific file in the input_path directory
         save all data as class attributes (e.g. self.demand, self.wind, etc.), structured as pandas DataFrames or Series (or other format as prefered)"""
+        return raw_data
         pass
 
     def load_aux_data(self, question_name: str, filename: str):
@@ -94,8 +102,16 @@ When running, define path and question as inputs. Path should be:
 
 """
 
-path = "C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimisation"
+path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
 question = "question_1a"
 data = DataLoader(input_path=path, question=question)
 loaded_data = data._load_dataset(question)
+print(loaded_data)
+
+path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
+question = "question_1a"
+data = DataLoader(input_path=path, question=question)
+filename = "consumer_params.json"
+p
+loaded_data = data._load_data_file(question, filename)
 print(loaded_data)
