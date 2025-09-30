@@ -13,9 +13,9 @@ class Expando(object):
     pass
 
 class InputData:
-"""
-holds an empty list of all the parameters needed for the optimization model
-"""    
+    """
+    holds an empty list of all the parameters needed for the optimization model
+    """    
     pass
 
 class OptModel:
@@ -49,7 +49,7 @@ class OptModel:
     Attributes (examples):
         N (int): Number of time steps/consumers/etc.
         question/scenario name (str): Configuration/question identifier.
-        ...
+        
     """
 
 
