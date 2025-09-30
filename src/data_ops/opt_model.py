@@ -38,7 +38,7 @@ class OptModel:
         imp_excess = self.model.addVars(self.T,self.data.imp_excess, name="imp_excess")
         exp_excess = self.model.addVars(self.T,self.data.exp_excess, name="exp_excess")
 
-        # make constraints
+        # make constraints varying over time
         for i in self.T:
             self.model.addConstr(DER[i] <= self.data.DER_max[i], name=f"DER_max[{i}]")
             self.model.addConstr(imp_excess[i] >= bought[i] - self.data.bought_max[i] , name=f"imp_excess[{i}]")
@@ -46,7 +46,7 @@ class OptModel:
             power_balance = {f"power_balance_{i}":self.model.addLConstr
                              (load[i] - DER[i] == bought[i] - sold[i], 
                               name=f"power_balance_{i}")}
-        
+        ### make total energy constraint that doesnt vary over time
         self.model.addConstr(sum(load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
         
         ### make objective function
