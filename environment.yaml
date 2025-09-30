@@ -10,8 +10,6 @@ dependencies:
   - gurobi            # gurobi + gurobipy from the official channel
   - numpy>=1.26
   - pandas>=2.1
-  - json
-  - csv
   - matplotlib>=3.8
   - seaborn>=0.13
   - jupyterlab>=4.2
