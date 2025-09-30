@@ -106,11 +106,11 @@ path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
 question = "question_1a"
 data = DataLoader(input_path=path, question=question)
 loaded_data = data._load_dataset(question)
-print(loaded_data)
+#print(loaded_data)
 
 path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
 question = "question_1a"
 data = DataLoader(input_path=path, question=question)
 filename = "consumer_params.json"
 loaded_data = data._load_data_file(question, filename)
-print(loaded_data)
+#print(loaded_data)

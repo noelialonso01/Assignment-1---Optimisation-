@@ -10,18 +10,6 @@ Suggested structure:
 """
 from pathlib import Path
 
-def main():
-    print("✅ Main is running.")
-    data_dir = Path("data")
-    jsons = list(data_dir.rglob("*.json"))
-    if jsons:
-        print("Found JSON files:")
-        for p in jsons:
-            print(" -", p)
-    else:
-        print("No JSON files found under ./data")
 
-if __name__ == "__main__":
-    main()
 #### Make function to create instance of runner class
 ### Make function to 
