@@ -28,11 +28,14 @@ class DataProcessor():
 
         variables = [key for key, value in appliance_params_unwrapped.items() if value is not None]
 
-        variables.extend(["bought", "sold"])
+        variables.extend(["bought", "sold", "exp_excess", "imp_excess"])
 
         return variables
 
     def getConstraints(self):
+
+
+
         """
         Collect the constraints: 
         pmax(t), 
