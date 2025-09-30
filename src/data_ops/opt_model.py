@@ -5,17 +5,20 @@ import gurobipy as gp
 import xarray as xr
 
 
-#from src.data_ops import data_loader
+
 from src.data_ops.data_loader import DataLoader
 from src.data_ops.data_processor import DataProcessor
-#from ...data_ops.data_loader import DataLoader
 class Expando(object):
     pass
 
 class InputData:
-"""
-holds an empty list of all the parameters needed for the optimization model
-"""    
+    """
+    holds an empty list of all the parameters needed for the optimization model
+    please store them in the form of dictionaries with the key being the name of the thing e.g 
+    load, load_max, DER, bought, etc. using the names from the data given.
+    See my code below for how i have used it.
+    We need to make sure the names align with OptModel names and data processor names
+    """
     pass
 
 class OptModel:
@@ -27,20 +30,30 @@ class OptModel:
         self.vars = Expando()
         self.T = range(0, 24)  # Time periods (0-23 hours)
 
-    def _build_variables(self):
-        load = self.model.addVars(self.data.load, name="load")
-        DER = self.model.addVars(self.data.DER, name="DER")
-        bought = self.model.addVars(self.data.bought, name="bought")
-        sold = self.model.addVars(self.data.sold, name="sold")
+    def _build(self):
+        load = self.model.addVars(self.T, self.data.load, ub=self.data.load_max, name="load")
+        DER = self.model.addVars(self.T,self.data.DER, name="DER")
+        bought = self.model.addVars(self.T,self.data.bought, name="bought")
+        sold = self.model.addVars(self.T,self.data.sold, name="sold")
+        imp_excess = self.model.addVars(self.T,self.data.imp_excess, name="imp_excess")
+        exp_excess = self.model.addVars(self.T,self.data.exp_excess, name="exp_excess")
 
-    def _build_constraints(self):
-        self.constraints = {}
-
-        power_balance = list[str]
-        power_balance = {f"power_balance_{t}":self.model.addLConstr(load[t] == DER[t] + bought[t] - sold[t], name=f"power_balance_{t}") for t in self.T}
+        # make constraints
+        for i in self.T:
+            self.model.addConstr(DER[i] <= self.data.DER_max[i], name=f"DER_max[{i}]")
+            self.model.addConstr(imp_excess[i] >= bought[i] - self.data.bought_max[i] , name=f"imp_excess[{i}]")
+            self.model.addConstr(exp_excess[i] >= sold[i] - self.data.sold_max[i] , name=f"exp_excess[{i}]")
+            power_balance = {f"power_balance_{i}":self.model.addLConstr
+                             (load[i] - DER[i] == bought[i] - sold[i], 
+                              name=f"power_balance_{i}")}
         
-        print(power_balance)
-        return power_balance
+        self.model.addConstr(sum(load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
+        
+        ### make objective function
+        self.model.setObjective(gp.quicksum(self.data.price[t]*bought[t] + self.data.grid_tariff_buy[t]*bought[t]
+                        - self.data.price[t]*sold[t] + self.data.grid_tariff_sell[t]*sold[t] 
+                        + self.data.penalty_import*imp_excess[t] + self.data.penalty_export*exp_excess[t] for t in self.T))
+        pass
         
         #max value constraint = self.model.addLConstr(self.variables[DER] + self.variables['y'] <= 10, name='constraint_1')
     """
