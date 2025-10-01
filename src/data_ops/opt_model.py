@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import gurobipy as gp
 import xarray as xr
+from gurobipy import GRB
 
 
 
@@ -47,19 +48,36 @@ class OptModel:
             self.model.addConstr(DER[i] <= self.data.DER_max[i], name=f"DER_max[{i}]")
             self.model.addConstr(imp_excess[i] >= bought[i] - self.data.bought_max[i] , name=f"imp_excess[{i}]")
             self.model.addConstr(exp_excess[i] >= sold[i] - self.data.sold_max[i] , name=f"exp_excess[{i}]")
-            power_balance = {f"power_balance_{i}":self.model.addLConstr
-                             (load[i] - DER[i] == bought[i] - sold[i], 
-                              name=f"power_balance_{i}")}
+            self.model.addLConstr(load[i] - DER[i] == bought[i] - sold[i], name=f"power_balance_{i}")
         ### make total energy constraint that doesnt vary over time
         self.model.addConstr(sum(load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
         
         ### make objective function
-        self.model.setObjective(gp.quicksum(self.data.price[t]*bought[t] + self.data.grid_tariff_buy[t]*bought[t]
+        obj_fn = gp.quicksum(self.data.price[t]*bought[t] + self.data.grid_tariff_buy[t]*bought[t]
                         - self.data.price[t]*sold[t] + self.data.grid_tariff_sell[t]*sold[t] 
-                        + self.data.penalty_import*imp_excess[t] + self.data.penalty_export*exp_excess[t] for t in self.T))
+                        + self.data.penalty_import*imp_excess[t] + self.data.penalty_export*exp_excess[t] for t in self.T)
+        
+        self.model.setObjective(obj_fn, GRB.MINIMIZE)
+        
+    def solve(self, verbose: bool = False):
+        if not verbose:
+            self.m.Params.OutputFlag = 0
+        self.model.optimize()
+        if self.model.Status not in (GRB.OPTIMAL, GRB.SUBOPTIMAL):
+            raise RuntimeError(f"Gurobi status: {self.m.Status}")
+
+        # Collect and store results in self.results
+        v = self.vars
+        self.results.load = np.array([v.load[i].X for i in self.T])
+        self.results.DER = np.array([v.DER[i].X for i in self.T])
+        self.results.bought = np.array([v.bought[i].X for i in self.T])
+        self.results.sold = np.array([v.sold[i].X for i in self.T])
+        self.results.imp_excess = np.array([v.imp_excess[i].X for i in self.T])
+        self.results.exp_excess = np.array([v.exp_excess[i].X for i in self.T])
+        self.results.obj = self.model.ObjVal
+        
         pass
         
-        #max value constraint = self.model.addLConstr(self.variables[DER] + self.variables['y'] <= 10, name='constraint_1')
     """
     Placeholder for optimization models using Gurobipy.
 
