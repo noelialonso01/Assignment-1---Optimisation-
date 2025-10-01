@@ -15,15 +15,11 @@ class Expando(object):
 class InputData:
     """
     holds an empty list of all the parameters needed for the optimization model
-<<<<<<< HEAD
-    """    
-=======
     please store them in the form of dictionaries with the key being the name of the thing e.g 
     load, load_max, DER, bought, etc. using the names from the data given.
     See my code below for how i have used it.
     We need to make sure the names align with OptModel names and data processor names
     """
->>>>>>> 08cd1b2601503ab784857c4f3d819d059caa050c
     pass
 
 class OptModel:
@@ -84,8 +80,8 @@ class OptModel:
     Attributes (examples):
         N (int): Number of time steps/consumers/etc.
         question/scenario name (str): Configuration/question identifier.
-        
     """
+
 
 
 path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
