@@ -14,13 +14,57 @@ class Expando(object):
 
 class InputData:
     """
-    holds an empty list of all the parameters needed for the optimization model
-    please store them in the form of dictionaries with the key being the name of the thing e.g 
-    load, load_max, DER, bought, etc. using the names from the data given.
-    See my code below for how i have used it.
-    We need to make sure the names align with OptModel names and data processor names
+    Input data for the consumer LP (Step 1A).
+
+    Symbols:
+      p_t            → p                  (list[float], DKK/kWh) market price
+      g^{ti}         → g_ti               (float, DKK/kWh)  import tariff
+      g^{te}         → g_te               (float, DKK/kWh)  export tariff
+      b_t^{max}      → b_max              (float or list, kW) max import
+      s_t^{max}      → s_max              (float or list, kW) max export
+      g^{ti,pen}     → g_ti_pen           (float, DKK/kWh) penalty for import above b_max
+      g^{te,pen}     → g_te_pen           (float, DKK/kWh) penalty for export above s_max
+      \overline P_t  → Pbar               (list[float], kWh) PV availability per hour
+      \underline L_t → L_lower            (list[float], kWh) minimum load
+      \overline L_t  → L_upper            (list[float], kWh) maximum load
+      E^{min}        → Lmin_total         (float, kWh) daily minimum energy
+
+    Conventions:
+      - All hourly arrays must have length T.
+      - If b_max / s_max are scalars, they apply to all hours.
     """
-    pass
+    def _init_(
+        self,
+        p: list[float],
+        gti: float,
+        gte: float,
+        bmax: float,
+        smax: float,
+        gti_pen: float,
+        gte_pen: float,
+        Pbar: list[float],
+        Lmin: float,
+        L_lower: list[float] = None,
+        L_upper: list[float] = None,):
+
+        assert len(p) == len(Pbar) == 24, "p and Pbar must be length-24"
+        if L_lower is not None:
+            assert len(L_lower) == 24, "L_lower must be length-24 if provided"
+        if L_upper is not None:
+            assert len(L_upper) == 24, "L_upper must be length-24 if provided"
+
+        self.T = list(range(24))
+        self.price = p
+        self.grid_tariff_buy = gti
+        self.grid_tariff_sell = gte
+        self.bought_max = bmax if isinstance(bmax, list) else [bmax] * 24
+        self.sold_max = smax if isinstance(smax, list) else [smax] * 24
+        self.penalty_import = gti_pen
+        self.penalty_export = gte_pen
+        self.DER_max = Pbar
+        self.load_min = L_lower or [0.0] * 24
+        self.load_max = L_upper or [float("inf")] * 24
+        self.emin = Lmin
 
 class OptModel:
 

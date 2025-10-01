@@ -97,7 +97,8 @@ class DataProcessor():
 
         
         
-path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
+#path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
+path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimisation-\data"
 question = "question_1a"
 data = DataProcessor(input_path=path, question=question)
 
