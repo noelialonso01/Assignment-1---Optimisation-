@@ -2,6 +2,7 @@ import json
 import csv
 import pandas as pd
 from pathlib import Path
+import numpy as np
 
 from src.data_ops.data_loader import DataLoader
 
@@ -27,12 +28,12 @@ class DataProcessor():
         appliance_params_unwrapped = appliance_params["appliance_params"]
 
         variables = [key for key, value in appliance_params_unwrapped.items() if value is not None]
-
         variables.extend(["bought", "sold", "exp_excess", "imp_excess"])
-
+        variables = pd.DataFrame({"variables": variables})
+        self.variables = variables
         return variables
 
-    def getConstraints(self):
+    def getCoefficients(self):
         
         """
         Collect the constraints: 
@@ -44,55 +45,29 @@ class DataProcessor():
         appliance_params = self.data_loader._load_data_file(self.question, "appliance_params.json")
         appliance_params_unwrapped = appliance_params["appliance_params"]
 
-        # --- Horizon (defaults to 24 if self.T not set) ---
-        T = len(self.T) if hasattr(self, "T") else 24
-        hours = pd.RangeIndex(0, T, name="hour")
+        usage_preferences = self.data_loader._load_data_file(self.question, "usage_preferences.json")
+        usage_preferences_unwrapped = usage_preferences["usage_preferences"]
 
-        # --- Fetch pmax(t): must be a 24-vector in JSON ---
-        pmax = _get_any(appliance_params_unwrapped, ["pmax", "p_max", "pmax_t", "pmax_profile"])
-        pmax = np.asarray(pmax, dtype=float)
-        if pmax.size != 24:
-            raise ValueError(f"'pmax' must be length-24, got length {pmax.size}")
+        bus_params = self.data_loader._load_data_file(self.question, "bus_params.json")
+        bus_params_unwrapped = bus_params["bus_params"]
 
-        # --- Fetch emin (scalar in JSON) ---
-        emin_day = _get_any(appliance_params_unwrapped, ["emin", "Emin", "emin_day", "E_min"])
-        emin_day = float(emin_day)  # scalar
-        self.emin_day = emin_day    # keep the scalar available elsewhere
+        DER_production = self.data_loader._load_data_file(self.question, "DER_production.json")
+        DER_production_unwrapped = DER_production["DER_production"]
 
-        # --- Fetch lmin, lmax (scalars in JSON), then broadcast to 24h vectors ---
-        lmin_scalar = float(_get_any(appliance_params_unwrapped, ["lmin", "Lmin", "L_min"]))
-        lmax_scalar = float(_get_any(appliance_params_unwrapped, ["lmax", "Lmax", "L_max"]))
+        imp_tariff = float(bus_params_unwrapped[0]["import_tariff_DKK/kWh"])
+        exp_tariff = float(bus_params_unwrapped[0]["export_tariff_DKK/kWh"])
+        max_import = float(bus_params_unwrapped[0]["max_import_kW"])
+        max_export = float(bus_params_unwrapped[0]["max_export_kW"])
+        excess_imp_tariff = float(bus_params_unwrapped[0]["penalty_excess_import_DKK/kWh"])
+        excess_exp_tariff = float(bus_params_unwrapped[0]["penalty_excess_export_DKK/kWh"])
+        hourly_energy_price = [float(x) for x in bus_params_unwrapped[0]["energy_price_DKK_per_kWh"]]
 
-        lmin_vec = np.full(T, lmin_scalar, dtype=float)
-        lmax_vec = np.full(T, lmax_scalar, dtype=float)
+        pmax = float(appliance_params_unwrapped["DER"][0]["max_power_kW"])
+        pmaxhourly = [float(x)*pmax for x in DER_production_unwrapped[0]["hourly_profile_ratio"]]
+        load_max = float(appliance_params_unwrapped["load"][0]["max_load_kWh_per_hour"])
+        emin = float(usage_preferences_unwrapped[0]["load_preferences"][0]["min_total_energy_per_day_hour_equivalent"])
+        return(pmaxhourly, emin, load_max, hourly_energy_price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff, excess_exp_tariff)
 
-        # --- Build the hourly DataFrame (emin repeated only for convenience/visibility) ---
-        constraints = pd.DataFrame({
-            "pmax": pmax[:T],      # if T==24 this is a no-op; keeps code flexible
-            "lmin": lmin_vec,
-            "lmax": lmax_vec,
-            "emin_day": emin_day,  # informational; the true constraint is daily, not hourly
-        }, index=hours)
-
-        # Optional sanity checks
-        if np.any(lmin_vec > lmax_vec):
-            raise ValueError("Found lmin > lmax after broadcasting.")
-        # If you want to ensure feasibility wrt emin, you could check:
-        # if emin_day < lmin_vec.sum() or emin_day > lmax_vec.sum():
-        #     raise ValueError("emin_day is infeasible given lmin/lmax bounds over the day.")
-
-        # Keep for downstream access
-        self.constraints = constraints
-
-        return constraints
-
-    def getObjCoefficients(self):
-        """
-        Collect hourly price data,
-        buy and sell tariffs,
-        penalty excess costs for import and export
-        """
-        return obj_coefficients
 
 
         
@@ -106,6 +81,6 @@ data = DataProcessor(input_path=path, question=question)
 variables = data.getVariables()
 print("Variables:", variables)
 
-constraints = data.getConstraints()
-print("Constraints DataFrame:")
-print(constraints)
+constraints = data.getCoefficients()
+#print("Constraints DataFrame:")
+#print(constraints)

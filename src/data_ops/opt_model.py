@@ -73,7 +73,7 @@ class OptModel:
         self.results = Expando() #define results attributes?
         self.model = gp.Model()
         self.vars = Expando()
-        self.T = range(0, 24)  # Time periods (0-23 hours)
+        self.T = self.data.T  # Time periods (0-23 hours)
 
     def _build(self):
         load = self.model.addVars(self.T, self.data.load, ub=self.data.load_max, name="load")

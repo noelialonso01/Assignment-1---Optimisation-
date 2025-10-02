@@ -12,7 +12,7 @@ from logging import Logger
 import pandas as pd
 import xarray as xr
 import numpy as np
-import yaml
+#import yaml
 
 from src.utils.utils import load_dataset
 from src.utils.utils import load_datafile
@@ -102,15 +102,17 @@ When running, define path and question as inputs. Path should be:
 
 """
 
-path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
-question = "question_1a"
-data = DataLoader(input_path=path, question=question)
-loaded_data = data._load_dataset(question)
-#print(loaded_data)
 
-path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
-question = "question_1a"
-data = DataLoader(input_path=path, question=question)
-filename = "consumer_params.json"
-loaded_data = data._load_data_file(question, filename)
-#print(loaded_data)
+# Example usage (do not include un-escaped Windows paths inside triple-quoted strings):
+# path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
+# question = "question_1a"
+# data = DataLoader(input_path=path, question=question)
+# loaded_data = data._load_dataset(question)
+# print(loaded_data)
+#
+# path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
+# question = "question_1a"
+# data = DataLoader(input_path=path, question=question)
+# filename = "consumer_params.json"
+# loaded_data = data._load_data_file(question, filename)
+# print(loaded_data)
