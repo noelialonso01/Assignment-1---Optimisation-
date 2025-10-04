@@ -5,7 +5,7 @@ import gurobipy as gp
 import xarray as xr
 from gurobipy import GRB
 
-from src.data_ops.data_loader import DataLoader
+from data_ops.data_loader import DataLoader
 
 class InputData:
 
@@ -52,7 +52,7 @@ class DataProcessor():
         appliance_params_unwrapped = appliance_params["appliance_params"]
 
         variables = [key for key, value in appliance_params_unwrapped.items() if value is not None]
-        variables.extend(["bought", "sold", "exp_excess", "imp_excess"])
+        variables.extend(["import", "export", "exp_excess", "imp_excess"])
         variables = pd.DataFrame({"variables": variables})
         self.variables = variables
 
@@ -108,23 +108,23 @@ class OptModel:
         print("emin is:", self.data.emin, "load max is:", self.data.load_max, "load min is:", self.data.load_min, "pmax is:", self.data.pmaxhourly, "price is:", self.data.price, "imp tariff is:", self.data.imp_tariff, "exp tariff is:", self.data.exp_tariff, "max import is:", self.data.max_import, "max export is:", self.data.max_export, "excess imp tariff is:", self.data.excess_imp_tariff, "excess exp tariff is:", self.data.excess_exp_tariff)
         v_load = self.model.addVars(self.T, lb=self.data.load_min, ub=self.data.load_max, name=f"v_load")
         v_prod = self.model.addVars(self.T, name="v_prod")
-        v_bought = self.model.addVars(self.T, name="v_bought")
-        v_sold = self.model.addVars(self.T, name="v_sold")
+        v_import = self.model.addVars(self.T, name="v_import")
+        v_export = self.model.addVars(self.T, name="v_export")
         v_imp_excess = self.model.addVars(self.T, name="v_imp_excess")
         v_exp_excess = self.model.addVars(self.T, name="v_exp_excess")
 
         # make constraints varying over time
         for i in self.T:
             self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"DER_max[{i}]")
-            self.model.addConstr(v_imp_excess[i] >= v_bought[i] - self.data.max_import, name=f"imp_excess[{i}]")
-            self.model.addConstr(v_exp_excess[i] >= v_sold[i] - self.data.max_export, name=f"exp_excess[{i}]")
-            self.model.addLConstr(v_load[i] - v_prod[i] == v_bought[i] - v_sold[i], name=f"power_balance_{i}")
+            self.model.addConstr(v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]")
+            self.model.addConstr(v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]")
+            self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
         # make total energy constraint that doesnt vary over time
         self.model.addConstr(sum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
         
         # make objective function
-        obj_fn = gp.quicksum(self.data.price[t]*v_bought[t] + self.data.imp_tariff*v_bought[t]
-                        - self.data.price[t]*v_sold[t] + self.data.exp_tariff*v_sold[t] 
+        obj_fn = gp.quicksum(self.data.price[t]*v_import[t] + self.data.imp_tariff*v_import[t]
+                        - self.data.price[t]*v_export[t] + self.data.exp_tariff*v_export[t] 
                         + self.data.excess_imp_tariff*v_imp_excess[t] + self.data.excess_exp_tariff*v_exp_excess[t] for t in self.T)
         
         self.model.setObjective(obj_fn, GRB.MINIMIZE)
@@ -132,10 +132,17 @@ class OptModel:
         # store variable handles
         self.vars.v_load = v_load
         self.vars.v_prod = v_prod
-        self.vars.v_bought = v_bought
-        self.vars.v_sold = v_sold
+        self.vars.v_import = v_import
+        self.vars.v_export = v_export
         self.vars.v_imp_excess = v_imp_excess
         self.vars.v_exp_excess = v_exp_excess
+
+    def update_data(self, data_name: str, new_value):
+            for i in self.data.__dict__.keys():
+                if i == data_name:
+                    setattr(self.data, data_name, new_value)
+                    print(f"Updated {data_name} to {new_value}")
+                    self.model.update()
         
     def solve(self, verbose: bool = False):
         if not verbose:
@@ -149,33 +156,162 @@ class OptModel:
         v = self.vars
         self.results.v_load = np.array([v.v_load[i].X for i in self.T])
         self.results.v_prod = np.array([v.v_prod[i].X for i in self.T])
-        self.results.v_bought = np.array([v.v_bought[i].X for i in self.T])
-        self.results.v_sold = np.array([v.v_sold[i].X for i in self.T])
+        self.results.v_import = np.array([v.v_import[i].X for i in self.T])
+        self.results.v_export = np.array([v.v_export[i].X for i in self.T])
         self.results.v_imp_excess = np.array([v.v_imp_excess[i].X for i in self.T])
         self.results.v_exp_excess = np.array([v.v_exp_excess[i].X for i in self.T])
         self.results.obj = self.model.ObjVal
+        self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
         return self.results
-        
+    
 
+class OptModel2:
+    def __init__(self, input_data: InputData):
+        self.data = input_data
+        self.results = Expando()
+        self.model = gp.Model()
+        self.vars = Expando()
+        self.cons = Expando()  # store constraint handles
+        self.cons.prod_max = {}
+        self.cons.imp_excess = {}
+        self.cons.exp_excess = {}
+        self.cons.power_balance = {}
+        self.T = self.data.T  # Time periods (0-23 hours)
 
-path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimisation-\data"
-question = "question_1a"
-data = DataProcessor(input_path=path, question=question).getCoefficients()
-model = OptModel(data)
-model._build()
-results = model.solve(verbose=True)
-results_df = pd.DataFrame({
-    "Load (kWh)": results.v_load,
-    "Production (kWh)": results.v_prod,
-    "Bought (kWh)": results.v_bought,
-    "Sold (kWh)": results.v_sold,
-    "Import Excess (kWh)": results.v_imp_excess,
-    "Export Excess (kWh)": results.v_exp_excess
-}, index=pd.Index(range(24), name="Hour"))
-print(f"Total daily expenditure (DKK): {results.obj:,.2f}")
-print(results_df)
+    # helper: index if vector, otherwise treat as scalar
+    def _at(self, x, t):
+        try:
+            return x[t]
+        except Exception:
+            return x
 
-#variables = data._build_variables()
-#constraints = data._build_constraints()
+    def _set_objective(self):
+        # same structure as yours; supports scalar or 24-vector tariffs/prices
+        obj_fn = gp.quicksum(
+            self._at(self.data.price, t)       * self.vars.v_import[t]
+          + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
+          - self._at(self.data.price, t)       * self.vars.v_export[t]
+          + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
+          + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
+          + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
+          for t in self.T
+        )
+        self.model.setObjective(obj_fn, GRB.MINIMIZE)
 
-#print("hello")
+    def _build(self):
+        ### variables are defined here, and denoted with v_
+        print("emin is:", self.data.emin, "load max is:", self.data.load_max, "load min is:", self.data.load_min,
+              "pmax is:", self.data.pmaxhourly, "price is:", self.data.price, "imp tariff is:", self.data.imp_tariff,
+              "exp tariff is:", self.data.exp_tariff, "max import is:", self.data.max_import, "max export is:",
+              self.data.max_export, "excess imp tariff is:", self.data.excess_imp_tariff, "excess exp tariff is:",
+              self.data.excess_exp_tariff)
+
+        # variable bounds (keep your names)
+        v_load = self.model.addVars(self.T, lb=self.data.load_min, ub=self.data.load_max, name=f"v_load")
+        v_prod = self.model.addVars(self.T, lb=0.0, name="v_prod")
+        v_import = self.model.addVars(self.T, lb=0.0, name="v_import")
+        v_export = self.model.addVars(self.T, lb=0.0, name="v_export")
+        v_imp_excess = self.model.addVars(self.T, lb=0.0, name="v_imp_excess")
+        v_exp_excess = self.model.addVars(self.T, lb=0.0, name="v_exp_excess")
+
+        # store variable handles with your names
+        self.vars.v_load = v_load
+        self.vars.v_prod = v_prod
+        self.vars.v_import = v_import
+        self.vars.v_export = v_export
+        self.vars.v_imp_excess = v_imp_excess
+        self.vars.v_exp_excess = v_exp_excess
+
+        # constraints (store handles so we can read Pi and update RHS later)
+        for i in self.T:
+            self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]")
+            # v_imp_excess[i] >= v_import[i] - max_import  ->  v_imp_excess - v_import >= -max_import (RHS)
+            self.cons.imp_excess[i] = self.model.addConstr(
+                v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]"
+            )
+            # v_exp_excess[i] >= v_export[i] - max_export  ->  v_exp_excess - v_export >= -max_export (RHS)
+            self.cons.exp_excess[i] = self.model.addConstr(
+                v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]"
+            )
+            self.cons.power_balance[i] = self.model.addLConstr(
+                v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}"
+            )
+
+        # total energy constraint (keep your name)
+        self.cons.emin_constraint = self.model.addConstr(
+            gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint"
+        )
+
+        # objective (same expression as yours, factored into helper)
+        self._set_objective()
+
+    def update_data(self, data_name: str, new_value):
+        # update Python-side data
+        if not hasattr(self.data, data_name):
+            raise AttributeError(f"No such data field on input data: {data_name}")
+        setattr(self.data, data_name, new_value)
+        print(f"Updated {data_name} to {new_value}")
+
+        # propagate to model (bounds/RHS/objective), keeping your names
+        if data_name == "pmaxhourly":
+            for i in self.T:
+                # v_prod[i] <= pmaxhourly[i]  (RHS)
+                self.cons.prod_max[i].RHS = float(self.data.pmaxhourly[i])
+
+        elif data_name == "emin":
+            self.cons.emin_constraint.RHS = float(self.data.emin)
+
+        elif data_name in {"load_min", "load_max"}:
+            # bounds on v_load
+            for i in self.T:
+                self.vars.v_load[i].LB = float(self.data.load_min[i])
+                self.vars.v_load[i].UB = float(self.data.load_max[i])
+
+        elif data_name == "max_import":
+            # v_imp_excess - v_import >= -max_import
+            for i in self.T:
+                self.cons.imp_excess[i].RHS = -float(self.data.max_import)
+
+        elif data_name == "max_export":
+            # v_exp_excess - v_export >= -max_export
+            for i in self.T:
+                self.cons.exp_excess[i].RHS = -float(self.data.max_export)
+
+        elif data_name in {"price", "imp_tariff", "exp_tariff", "excess_imp_tariff", "excess_exp_tariff"}:
+            # prices/tariffs affect the objective coefficients
+            self._set_objective()
+
+        self.model.update()
+
+    def solve(self, verbose: bool = False):
+        if not verbose:
+            self.model.Params.OutputFlag = 0
+        self.model.optimize()
+        if self.model.Status not in (GRB.OPTIMAL, GRB.SUBOPTIMAL):
+            raise RuntimeError(f"Gurobi status: {self.model.Status}")
+
+        # Collect and store results in self.results
+        v = self.vars
+        self.results.v_load = np.array([v.v_load[i].X for i in self.T], dtype=float)
+        self.results.v_prod = np.array([v.v_prod[i].X for i in self.T], dtype=float)
+        self.results.v_import = np.array([v.v_import[i].X for i in self.T], dtype=float)
+        self.results.v_export = np.array([v.v_export[i].X for i in self.T], dtype=float)
+        self.results.v_imp_excess = np.array([v.v_imp_excess[i].X for i in self.T], dtype=float)
+        self.results.v_exp_excess = np.array([v.v_exp_excess[i].X for i in self.T], dtype=float)
+        self.results.obj = float(self.model.ObjVal)
+        self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
+
+        duals = Expando()
+        # per-hour constraints -> arrays length |T|
+        duals.prod_max       = np.array([self.cons.prod_max[i].Pi       for i in self.T], dtype=float)
+        duals.imp_excess    = np.array([self.cons.imp_excess[i].Pi    for i in self.T], dtype=float)
+        duals.exp_excess    = np.array([self.cons.exp_excess[i].Pi    for i in self.T], dtype=float)
+        duals.power_balance = np.array([self.cons.power_balance[i].Pi for i in self.T], dtype=float)
+        # single daily energy constraint -> scalar
+        duals.emin_constraint = float(self.cons.emin_constraint.Pi)
+
+        self.results.duals = duals
+        return self.results
+    
+
+    

@@ -14,8 +14,8 @@ import xarray as xr
 import numpy as np
 #import yaml
 
-from src.utils.utils import load_dataset
-from src.utils.utils import load_datafile
+from utils.utils import load_dataset
+from utils.utils import load_datafile
 
 
 
