@@ -21,7 +21,8 @@ class InputData:
         pmaxhourly: list[float],
         emin: float,
         load_min: list[float],
-        load_max: list[float]):
+        load_max: list[float],
+        load_profile: list[float]):
 
         self.T = list(range(24))
         self.price = price
@@ -35,6 +36,7 @@ class InputData:
         self.load_min = load_min
         self.load_max = load_max
         self.emin = emin
+        self.load_profile = load_profile
 
 class DataProcessor():
 
@@ -50,7 +52,6 @@ class DataProcessor():
 
         appliance_params = self.data_loader._load_data_file(self.question, "appliance_params.json")
         appliance_params_unwrapped = appliance_params["appliance_params"]
-
         variables = [key for key, value in appliance_params_unwrapped.items() if value is not None]
         variables.extend(["import", "export", "exp_excess", "imp_excess"])
         variables = pd.DataFrame({"variables": variables})
@@ -82,92 +83,24 @@ class DataProcessor():
         pmax = float(appliance_params_unwrapped["DER"][0]["max_power_kW"])
         pmaxhourly = [float(x)*pmax for x in DER_production_unwrapped[0]["hourly_profile_ratio"]]
         load_min = float(appliance_params_unwrapped["load"][0]["min_load_ratio"])*float(appliance_params_unwrapped["load"][0]["max_load_kWh_per_hour"])
-        #print("load min iis:", load_min)
         load_max = float(appliance_params_unwrapped["load"][0]["max_load_kWh_per_hour"])
-        emin = float(usage_preferences_unwrapped[0]["load_preferences"][0]["min_total_energy_per_day_hour_equivalent"])*load_max
-        print("emin is:", emin, "load max is:", load_max, "load min is:", load_min, "pmax is:", pmax, "pmaxhourly is:", pmaxhourly, "price is:", price, "imp tariff is:", imp_tariff, "exp tariff is:", exp_tariff, "max import is:", max_import, "max export is:", max_export, "excess imp tariff is:", excess_imp_tariff, "excess exp tariff is:", excess_exp_tariff,)
+        if self.question == "question_1a":
+            load_profile = None
+            emin = float(usage_preferences_unwrapped[0]["load_preferences"][0]["min_total_energy_per_day_hour_equivalent"])*load_max
+        else:
+            load_profile = [float(x) for x in (usage_preferences_unwrapped[0]["load_preferences"][0]["hourly_profile_ratio"])]
+            emin = None
+        #print("emin is:", emin, "load max is:", load_max, "load min is:", load_min, "pmax is:", pmax, "pmaxhourly is:", pmaxhourly, "price is:", price, "imp tariff is:", imp_tariff, "exp tariff is:", exp_tariff, "max import is:", max_import, "max export is:", max_export, "excess imp tariff is:", excess_imp_tariff, "excess exp tariff is:", excess_exp_tariff,)
         return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
-               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max)
+               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile)
 
 class Expando(object):
-
     pass
 
-
-class OptModel:
-
-    def __init__(self, input_data: InputData):
-        self.data = input_data
-        self.results = Expando()
-        self.model = gp.Model()
-        self.vars = Expando()
-        self.T = self.data.T  # Time periods (0-23 hours)
-
-    def _build(self):
-        ### variables are defined here, and denoted with v_
-        print("emin is:", self.data.emin, "load max is:", self.data.load_max, "load min is:", self.data.load_min, "pmax is:", self.data.pmaxhourly, "price is:", self.data.price, "imp tariff is:", self.data.imp_tariff, "exp tariff is:", self.data.exp_tariff, "max import is:", self.data.max_import, "max export is:", self.data.max_export, "excess imp tariff is:", self.data.excess_imp_tariff, "excess exp tariff is:", self.data.excess_exp_tariff)
-        v_load = self.model.addVars(self.T, lb=self.data.load_min, ub=self.data.load_max, name=f"v_load")
-        v_prod = self.model.addVars(self.T, name="v_prod")
-        v_import = self.model.addVars(self.T, name="v_import")
-        v_export = self.model.addVars(self.T, name="v_export")
-        v_imp_excess = self.model.addVars(self.T, name="v_imp_excess")
-        v_exp_excess = self.model.addVars(self.T, name="v_exp_excess")
-
-        # make constraints varying over time
-        for i in self.T:
-            self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"DER_max[{i}]")
-            self.model.addConstr(v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]")
-            self.model.addConstr(v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]")
-            self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
-        # make total energy constraint that doesnt vary over time
-        self.model.addConstr(sum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
-        
-        # make objective function
-        obj_fn = gp.quicksum(self.data.price[t]*v_import[t] + self.data.imp_tariff*v_import[t]
-                        - self.data.price[t]*v_export[t] + self.data.exp_tariff*v_export[t] 
-                        + self.data.excess_imp_tariff*v_imp_excess[t] + self.data.excess_exp_tariff*v_exp_excess[t] for t in self.T)
-        
-        self.model.setObjective(obj_fn, GRB.MINIMIZE)
-        
-        # store variable handles
-        self.vars.v_load = v_load
-        self.vars.v_prod = v_prod
-        self.vars.v_import = v_import
-        self.vars.v_export = v_export
-        self.vars.v_imp_excess = v_imp_excess
-        self.vars.v_exp_excess = v_exp_excess
-
-    def update_data(self, data_name: str, new_value):
-            for i in self.data.__dict__.keys():
-                if i == data_name:
-                    setattr(self.data, data_name, new_value)
-                    print(f"Updated {data_name} to {new_value}")
-                    self.model.update()
-        
-    def solve(self, verbose: bool = False):
-        if not verbose:
-            self.model.Params.OutputFlag = 0
-        self.model.optimize()
-        if self.model.Status not in (GRB.OPTIMAL, GRB.SUBOPTIMAL):
-            raise RuntimeError(f"Gurobi status: {self.m.Status}")
-
-
-        # Collect and store results in self.results
-        v = self.vars
-        self.results.v_load = np.array([v.v_load[i].X for i in self.T])
-        self.results.v_prod = np.array([v.v_prod[i].X for i in self.T])
-        self.results.v_import = np.array([v.v_import[i].X for i in self.T])
-        self.results.v_export = np.array([v.v_export[i].X for i in self.T])
-        self.results.v_imp_excess = np.array([v.v_imp_excess[i].X for i in self.T])
-        self.results.v_exp_excess = np.array([v.v_exp_excess[i].X for i in self.T])
-        self.results.obj = self.model.ObjVal
-        self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
-        return self.results
-    
-
 class OptModel2:
-    def __init__(self, input_data: InputData):
+    def __init__(self, input_data: InputData, question: str):
         self.data = input_data
+        self.question = question
         self.results = Expando()
         self.model = gp.Model()
         self.vars = Expando()
@@ -176,6 +109,10 @@ class OptModel2:
         self.cons.imp_excess = {}
         self.cons.exp_excess = {}
         self.cons.power_balance = {}
+        self.cons.load_max = {}
+        self.cons.load_min = {}
+        self.cons.deviation_pos = {}
+        self.cons.deviation_neg = {}
         self.T = self.data.T  # Time periods (0-23 hours)
 
     # helper: index if vector, otherwise treat as scalar
@@ -186,63 +123,78 @@ class OptModel2:
             return x
 
     def _set_objective(self):
-        # same structure as yours; supports scalar or 24-vector tariffs/prices
-        obj_fn = gp.quicksum(
-            self._at(self.data.price, t)       * self.vars.v_import[t]
-          + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
-          - self._at(self.data.price, t)       * self.vars.v_export[t]
-          + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
-          + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
-          + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
-          for t in self.T
-        )
+    ### sets relevant objective function based on question 
+        if self.question == "question_1a":
+            obj_fn = gp.quicksum(
+                self._at(self.data.price, t)       * self.vars.v_import[t]
+              + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
+              - self._at(self.data.price, t)       * self.vars.v_export[t]
+              + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
+              + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
+              + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
+              for t in self.T
+            )
+        if self.question == "question_1b":
+            ####   NEED TO ADJUST THIS #########
+            self.alpha = 10
+            obj_fn = gp.quicksum(
+                self._at(self.data.price, t)       * self.vars.v_import[t]
+              + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
+              - self._at(self.data.price, t)       * self.vars.v_export[t]
+              + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
+              + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
+              + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
+              + self.alpha * self.vars.v_deviation[t] for t in self.T
+            )
+
         self.model.setObjective(obj_fn, GRB.MINIMIZE)
 
     def _build(self):
         ### variables are defined here, and denoted with v_
-        print("emin is:", self.data.emin, "load max is:", self.data.load_max, "load min is:", self.data.load_min,
-              "pmax is:", self.data.pmaxhourly, "price is:", self.data.price, "imp tariff is:", self.data.imp_tariff,
-              "exp tariff is:", self.data.exp_tariff, "max import is:", self.data.max_import, "max export is:",
-              self.data.max_export, "excess imp tariff is:", self.data.excess_imp_tariff, "excess exp tariff is:",
-              self.data.excess_exp_tariff)
-
-        # variable bounds (keep your names)
-        v_load = self.model.addVars(self.T, lb=self.data.load_min, ub=self.data.load_max, name=f"v_load")
+        v_load = self.model.addVars(self.T, lb=0.0, name=f"v_load")
         v_prod = self.model.addVars(self.T, lb=0.0, name="v_prod")
         v_import = self.model.addVars(self.T, lb=0.0, name="v_import")
         v_export = self.model.addVars(self.T, lb=0.0, name="v_export")
         v_imp_excess = self.model.addVars(self.T, lb=0.0, name="v_imp_excess")
         v_exp_excess = self.model.addVars(self.T, lb=0.0, name="v_exp_excess")
+        v_deviation = self.model.addVars(self.T, lb=0.0, name="v_deviation")
 
-        # store variable handles with your names
+        # store variable handles
         self.vars.v_load = v_load
         self.vars.v_prod = v_prod
         self.vars.v_import = v_import
         self.vars.v_export = v_export
         self.vars.v_imp_excess = v_imp_excess
         self.vars.v_exp_excess = v_exp_excess
+        self.vars.v_deviation = v_deviation
 
         # constraints (store handles so we can read Pi and update RHS later)
         for i in self.T:
-            self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]")
-            # v_imp_excess[i] >= v_import[i] - max_import  ->  v_imp_excess - v_import >= -max_import (RHS)
+            self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]"
+                                                         )
             self.cons.imp_excess[i] = self.model.addConstr(
                 v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]"
             )
-            # v_exp_excess[i] >= v_export[i] - max_export  ->  v_exp_excess - v_export >= -max_export (RHS)
             self.cons.exp_excess[i] = self.model.addConstr(
                 v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]"
             )
             self.cons.power_balance[i] = self.model.addLConstr(
                 v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}"
             )
+            self.cons.load_max[i] = self.model.addConstr(v_load[i] <= self.data.load_max, name=f"load_max[{i}]")
+            self.cons.load_min[i] = self.model.addConstr(v_load[i] >= self.data.load_min, name=f"load_min[{i}]")
 
-        # total energy constraint (keep your name)
-        self.cons.emin_constraint = self.model.addConstr(
-            gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint"
-        )
-
-        # objective (same expression as yours, factored into helper)
+        # total energy constraint (not per-hour)
+        if self.question == "question_1a":
+            self.cons.emin_constraint = self.model.addConstr(
+                gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint"
+            )
+        if self.question == "question_1b":
+            print("Load profile is set to:", self.data.load_profile)
+            for i in self.T:
+                self.cons.deviation_pos[i] = self.model.addConstr(v_deviation[i] >= v_load[i] - self.data.load_profile[i]*self.data.load_max, name="deviation_pos")
+                self.cons.deviation_neg[i] = self.model.addConstr(v_deviation[i] >= -(v_load[i] - self.data.load_profile[i]*self.data.load_max), name="deviation_pos")
+                #self.cons.deviation[i] = self.model.addConstr(v_deviation[i] = abs(v_load[i] - self.data.load_profile[i]*self.data.load_max), name="deviation")
         self._set_objective()
 
     def update_data(self, data_name: str, new_value):
@@ -252,7 +204,7 @@ class OptModel2:
         setattr(self.data, data_name, new_value)
         print(f"Updated {data_name} to {new_value}")
 
-        # propagate to model (bounds/RHS/objective), keeping your names
+        # propagate to model (bounds/RHS/objective)
         if data_name == "pmaxhourly":
             for i in self.T:
                 # v_prod[i] <= pmaxhourly[i]  (RHS)
@@ -264,8 +216,8 @@ class OptModel2:
         elif data_name in {"load_min", "load_max"}:
             # bounds on v_load
             for i in self.T:
-                self.vars.v_load[i].LB = float(self.data.load_min[i])
-                self.vars.v_load[i].UB = float(self.data.load_max[i])
+                self.cons.load_min[i].RHS = float(self.data.load_min)
+                self.cons.load_max[i].RHS = float(self.data.load_max)
 
         elif data_name == "max_import":
             # v_imp_excess - v_import >= -max_import
@@ -283,6 +235,41 @@ class OptModel2:
 
         self.model.update()
 
+    def store_results(self):
+        """Build and stash results as DataFrames (primal & duals) + meta dict."""
+        idx = pd.RangeIndex(len(self.T), name="Hour")
+
+        # --- primal (kWh series) --- 
+        self.results_df = pd.DataFrame({
+            "Load (kWh)":          np.asarray(self.results.v_load, dtype=float),
+            "Production (kWh)":    np.asarray(self.results.v_prod, dtype=float),
+            "Import (kWh)":        np.asarray(self.results.v_import, dtype=float),
+            "Export (kWh)":        np.asarray(self.results.v_export, dtype=float),
+            "Import Excess (kWh)": np.asarray(self.results.v_imp_excess, dtype=float),
+            "Export Excess (kWh)": np.asarray(self.results.v_exp_excess, dtype=float),
+            "Price (DKK/kWh)":     np.asarray(self.results.prices, dtype=float).reshape(-1),
+        }, index=idx)
+
+        # --- duals (shadow prices) ---
+        d = self.results.duals
+        der = getattr(d, "prod_max", getattr(d, "prod_max", None))
+        self.duals_df = pd.DataFrame({
+            "prod_max":       np.asarray(der, dtype=float),
+            "load_max":       np.asarray(der, dtype=float),
+            "load_min":       np.asarray(der, dtype=float),
+            "imp_excess":    np.asarray(d.imp_excess, dtype=float),
+            "exp_excess":    np.asarray(d.exp_excess, dtype=float),
+            "power_balance": np.asarray(d.power_balance, dtype=float),
+        }, index=idx)
+
+        # --- meta (scalars) ---
+        self.meta = {
+            "objective_value": float(self.results.obj),
+            "dual_emin_constraint": float(d.emin_constraint),
+        }
+
+        return self.results_df, self.duals_df, self.meta
+
     def solve(self, verbose: bool = False):
         if not verbose:
             self.model.Params.OutputFlag = 0
@@ -298,20 +285,28 @@ class OptModel2:
         self.results.v_export = np.array([v.v_export[i].X for i in self.T], dtype=float)
         self.results.v_imp_excess = np.array([v.v_imp_excess[i].X for i in self.T], dtype=float)
         self.results.v_exp_excess = np.array([v.v_exp_excess[i].X for i in self.T], dtype=float)
+        self.results.v_deviation = np.array([v.v_deviation[i].X for i in self.T], dtype=float)
         self.results.obj = float(self.model.ObjVal)
         self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
 
         duals = Expando()
         # per-hour constraints -> arrays length |T|
         duals.prod_max       = np.array([self.cons.prod_max[i].Pi       for i in self.T], dtype=float)
+        duals.load_max       = np.array([self.cons.load_max[i].Pi       for i in self.T], dtype=float)
+        duals.load_min       = np.array([self.cons.load_min[i].Pi       for i in self.T], dtype=float)
         duals.imp_excess    = np.array([self.cons.imp_excess[i].Pi    for i in self.T], dtype=float)
         duals.exp_excess    = np.array([self.cons.exp_excess[i].Pi    for i in self.T], dtype=float)
         duals.power_balance = np.array([self.cons.power_balance[i].Pi for i in self.T], dtype=float)
+        if self.question == "question_1b":
+            duals.deviation_pos = np.array([self.cons.deviation_pos[i].Pi for i in self.T], dtype=float)
+            duals.deviation_neg = np.array([self.cons.deviation_neg[i].Pi for i in self.T], dtype=float)
         # single daily energy constraint -> scalar
-        duals.emin_constraint = float(self.cons.emin_constraint.Pi)
-
+        if self.question == "question_1a":
+            duals.emin_constraint = float(self.cons.emin_constraint.Pi)
+        
         self.results.duals = duals
         return self.results
+    
     
 
     

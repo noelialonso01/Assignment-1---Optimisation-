@@ -41,7 +41,7 @@ def load_datafile(file_name, question_name, input_path):
         result[stem] = json.load(f)
     return result
 
-def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, show: bool = True):
+def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, show: bool = True, show_price_line = True, title: str = "Stacked flows vs time (with energy price)"):
     price_ser = df.pop("Price (DKK/kWh)")
     cols = [c for c in df.columns if not df[c].dropna().empty]
     if not cols:
@@ -74,22 +74,26 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
         if neg.any():
             ax.bar(x, neg, bottom=cum_neg, label=str(col))
             cum_neg += neg
-
     handles, labels = ax.get_legend_handles_labels()
-    ax2 = ax.twinx()
-    price_line, = ax2.plot(x, price_ser.reindex(df.index).to_numpy(dtype=float), marker="x", color="red",label="Price (DKK/kWh)")
-    price_line.set_zorder(3)  # draw line above bars
-    ax2.tick_params(axis="y", colors="red")
-    ax2.spines["right"].set_color("red")
-    ax2.set_ylabel("Price (DKK/kWh)", color="red")
-    # Merge legends
-    h2, l2 = ax2.get_legend_handles_labels()
-    handles += h2
-    labels += l2
-
+    if show_price_line:
+        price_line, = ax2.plot(x, price_ser.reindex(df.index).to_numpy(dtype=float), marker="x", color="red",label="Price (DKK/kWh)")
+        price_line.set_zorder(3)  # draw line above bars
+        ax2 = ax.twinx()
+        ax2.tick_params(axis="y", colors="red")
+        ax2.spines["right"].set_color("red")
+        ax2.set_ylabel("Price (DKK/kWh)", color="red")
+        # Merge legends
+        h2, l2 = ax2.get_legend_handles_labels()
+        handles += h2
+        labels += l2
+    else:
+        for extra_ax in getattr(fig, "axes", [])[1:]:
+            extra_ax.remove()
+        # keep legend for the bars only
+    ax.legend(handles, labels, loc="best")
     ax.set_xlabel(x_label)
     ax.set_ylabel("Flows (kWh)")
-    ax.set_title("Stacked flows vs time (with energy price)")
+    ax.set_title(title)
     ax.yaxis.set_minor_locator(AutoMinorLocator(4)) 
     ax.set_xticks(x, labels=x_labels)
     ax.grid(True, which="major", axis="y")
