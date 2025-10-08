@@ -31,7 +31,8 @@ path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimis
 
 #Question_2 = RunnerQ2(path)
 Question_2 = RunnerQ2(path)
-Question_2.question1_b_iv()
+#Question_2.question1_b_iv()
+Question_2.question1_b_v_varying_alpha()
 
 
 

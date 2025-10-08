@@ -75,10 +75,11 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
             ax.bar(x, neg, bottom=cum_neg, label=str(col))
             cum_neg += neg
     handles, labels = ax.get_legend_handles_labels()
+    ax2 = None
     if show_price_line:
+        ax2 = ax.twinx()
         price_line, = ax2.plot(x, price_ser.reindex(df.index).to_numpy(dtype=float), marker="x", color="red",label="Price (DKK/kWh)")
         price_line.set_zorder(3)  # draw line above bars
-        ax2 = ax.twinx()
         ax2.tick_params(axis="y", colors="red")
         ax2.spines["right"].set_color("red")
         ax2.set_ylabel("Price (DKK/kWh)", color="red")
@@ -109,6 +110,43 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
         plt.show()
     else:
         plt.close(fig)
+
+def plot_objective_value_sensitivity(variable, variable_name: str, obj_values = None,
+                               save_path: str | None = None, show: bool = True):
+    plt.figure(figsize=(8, 5))
+    plt.plot(variable, obj_values, marker='o')
+    plt.xlabel(variable_name)
+    plt.ylabel('Daily spend (DKK)')
+    plt.title(f'Sensitivity Analysis of {variable_name}')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    #plt.legend()
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+def sensitivity_analysis_on_obj_value(variable_list, variable_name, model):
+    obj_value = []
+    for variable in variable_list:
+        model.update_data(variable_name, variable)
+        results = model.solve(verbose=True)
+        obj_value.append(results.obj)
+        results_df = pd.DataFrame({
+                "Load": results.v_load,
+                "Production": results.v_prod,
+                "Import": results.v_import,
+                "Export": results.v_export,
+                "Import Excess": results.v_imp_excess,
+                "Export Excess": results.v_exp_excess,
+                "Price (DKK/kWh)": results.prices
+            }, index=pd.Index(range(24), name="Hour"))
+            #plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/f"1)b){variable_name}={variable}", 
+                                    #show=True, show_price_line=False,
+                                    #title=f"Stacked flows vs time {variable_name} = {variable}")
+    plot_objective_value_sensitivity(variable_list, variable_name, obj_values = obj_value)
 
 # example function to save model results in a specified directory
 def save_model_results():

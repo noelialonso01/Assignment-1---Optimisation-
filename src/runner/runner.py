@@ -32,7 +32,7 @@ class RunnerQ1:
             "Price (DKK/kWh)": results.prices
         }, index=pd.Index(range(24), name="Hour"))
         print(f"Total daily expenditure for question 1)a)iv) (DKK): {results.obj:,.2f}")
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"question1)a)iv)", show=True, show_price_line=False,title="Stacked flows vs time (original data used)")
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)a)iv)", show=True, show_price_line=True,title="Stacked flows vs time (original data used)")
     pass
 
     def question1_a_v_fixed_hourly_load(self):
@@ -66,7 +66,7 @@ class RunnerQ1:
                 "Price (DKK/kWh)": results.prices
             }, index=pd.Index(range(24), name="Hour"))
         print(f"Total daily expenditure for question 1)a)iv) (DKK): {results.obj:,.2f}")
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"question1)a)FixedHourlyLoad", show=True, show_price_line=False, title="Stacked flows vs time (fixed hourly load)")
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)a)FixedHourlyLoad", show=True, show_price_line=False, title="Stacked flows vs time (fixed hourly load)")
         pass
 
 
@@ -99,7 +99,7 @@ class RunnerQ1:
                 "Price (DKK/kWh)": results.prices
             }, index=pd.Index(range(24), name="Hour"))
         print(f"Total daily expenditure (DKK): {results.obj:,.2f}")
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"question1)a)NoImportTariff", show=True,
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)a)NoImportTariff", show=True,
                                     show_price_line=False, title="Stacked flows vs time (no import tariff)")
         pass
 
@@ -132,7 +132,7 @@ class RunnerQ1:
                 "Price (DKK/kWh)": results.prices
             }, index=pd.Index(range(24), name="Hour"))
         print(f"Total daily expenditure for (DKK): {results.obj:,.2f}")
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"question1)a)NoExportTariff", show=True, 
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)a)NoExportTariff", show=True, 
                                 show_price_line=False, title="Stacked flows vs time (no export tariff)")
         pass
     

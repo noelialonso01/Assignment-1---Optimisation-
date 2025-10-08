@@ -136,7 +136,7 @@ class OptModel2:
             )
         if self.question == "question_1b":
             ####   NEED TO ADJUST THIS #########
-            self.alpha = 10
+            #self.alpha = 10
             obj_fn = gp.quicksum(
                 self._at(self.data.price, t)       * self.vars.v_import[t]
               + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
@@ -144,13 +144,14 @@ class OptModel2:
               + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
               + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
               + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
-              + self.alpha * self.vars.v_deviation[t] for t in self.T
+              + self.data.alpha * self.vars.v_deviation[t] for t in self.T
             )
 
         self.model.setObjective(obj_fn, GRB.MINIMIZE)
 
-    def _build(self):
+    def _build(self, alpha: float = 100):
         ### variables are defined here, and denoted with v_
+        self.data.alpha = alpha
         v_load = self.model.addVars(self.T, lb=0.0, name=f"v_load")
         v_prod = self.model.addVars(self.T, lb=0.0, name="v_prod")
         v_import = self.model.addVars(self.T, lb=0.0, name="v_import")
@@ -229,7 +230,7 @@ class OptModel2:
             for i in self.T:
                 self.cons.exp_excess[i].RHS = -float(self.data.max_export)
 
-        elif data_name in {"price", "imp_tariff", "exp_tariff", "excess_imp_tariff", "excess_exp_tariff"}:
+        elif data_name in {"price", "imp_tariff", "exp_tariff", "excess_imp_tariff", "excess_exp_tariff", "alpha"}:
             # prices/tariffs affect the objective coefficients
             self._set_objective()
 
