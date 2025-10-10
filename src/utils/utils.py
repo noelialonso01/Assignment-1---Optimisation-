@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 import numpy as np
 
-# example function to load data from a specified directory
+"""
+Here we have two functions for loading a dataset and loading a file
+"""
 def load_dataset(question_name, input_path):
     base_path = Path(input_path) / question_name
     result = {}
@@ -41,6 +43,10 @@ def load_datafile(file_name, question_name, input_path):
         result[stem] = json.load(f)
     return result
 
+
+"""
+Now we have some plotting functions
+"""
 def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, show: bool = True, show_price_line = True, title: str = "Stacked flows vs time (with energy price)"):
     price_ser = df.pop("Price (DKK/kWh)")
     cols = [c for c in df.columns if not df[c].dropna().empty]
@@ -111,15 +117,26 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
     else:
         plt.close(fig)
 
-def plot_objective_value_sensitivity(variable, variable_name: str, obj_values = None,
+
+def plot_objective_value_sensitivity(variable_dict, variable_name: str, obj_values = None,
                                save_path: str | None = None, show: bool = True):
-    plt.figure(figsize=(8, 5))
-    plt.plot(variable, obj_values, marker='o')
-    plt.xlabel(variable_name)
-    plt.ylabel('Daily spend (DKK)')
-    plt.title(f'Sensitivity Analysis of {variable_name}')
-    plt.grid(True, linestyle='--', alpha=0.5)
-    #plt.legend()
+    
+    plt.figure(figsize=(6, 2))
+    y_position = 1  # fixed y-coordinate for all points
+    scenario_names = list(variable_dict.keys())
+    plt.axhline(y=y_position, color='gray', linestyle='--', linewidth=1)
+    # Plot each scenario as a point at the same y-coordinate
+
+    for name, value in zip(scenario_names, obj_values):
+        if name == "original_price_profile":
+            plt.scatter(value, y_position, marker='x', s=100, label=name)
+        else:
+            plt.scatter(value, y_position, marker='o', s=80, label=name)
+    plt.xlabel("Daily Consumer Costs (DKK)")
+    plt.yticks([])
+    plt.title("Sensitivity Analysis of Objective Value Across Price Scenarios")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')  # put legend outside plot
+    plt.grid(True, axis ="x", linestyle='--', alpha=0.5)
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -128,25 +145,76 @@ def plot_objective_value_sensitivity(variable, variable_name: str, obj_values = 
     else:
         plt.close()
 
-def sensitivity_analysis_on_obj_value(variable_list, variable_name, model):
-    obj_value = []
-    for variable in variable_list:
-        model.update_data(variable_name, variable)
-        results = model.solve(verbose=True)
-        obj_value.append(results.obj)
-        results_df = pd.DataFrame({
-                "Load": results.v_load,
-                "Production": results.v_prod,
-                "Import": results.v_import,
-                "Export": results.v_export,
-                "Import Excess": results.v_imp_excess,
-                "Export Excess": results.v_exp_excess,
-                "Price (DKK/kWh)": results.prices
-            }, index=pd.Index(range(24), name="Hour"))
-            #plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/f"1)b){variable_name}={variable}", 
-                                    #show=True, show_price_line=False,
-                                    #title=f"Stacked flows vs time {variable_name} = {variable}")
-    plot_objective_value_sensitivity(variable_list, variable_name, obj_values = obj_value)
+
+def plot_price_scenarios(variable_dict, save_path: str | None = None, show: bool = True):
+    hours = np.arange(24)
+    plt.figure(figsize=(12, 6))
+
+    for col in variable_dict.keys():
+        if col == "original_price_profile":
+            plt.plot(hours, variable_dict[col], marker='o', linestyle='-', label='Original', linewidth=2)
+        else:
+            plt.plot(hours, variable_dict[col], marker='x', linestyle='--', alpha=0.7, label=col)
+    # Graph features
+    plt.xlabel('Hour of Day')
+    plt.ylabel('Price (DKK)')
+    plt.title('Price Scenarios over 24 Hours')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend()
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+def plot_load_scenarios(load_df, save_path: str | None = None, show: bool = True):
+    hours = load_df.index.values
+    plt.figure(figsize=(12, 6))
+    # Plot original profile
+    for col in load_df.columns:
+        if col == "original_price_profile":
+            plt.plot(hours, load_df[col], marker='o', linestyle='-', label='Original', linewidth=2)
+        else:
+            plt.plot(hours, load_df[col], marker='x', linestyle='--', alpha=0.7, label=col)
+    # Graph features
+    plt.xlabel('Hour of Day')
+    plt.ylabel('Load (kWh)')
+    plt.title('Optimal load profiles for the different price scenarios')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend()
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+def plot_dual_scenarios(dual_df, save_path: str | None = None, show: bool = True, title: str = "Dual values for the different price scenarios"):
+    hours = dual_df.index.values
+    plt.figure(figsize=(12, 6))
+    # Plot original profile
+    for col in dual_df.columns:
+        if col == "original_price_profile":
+            plt.plot(hours, dual_df[col], marker='o', linestyle='-', label='Original', linewidth=2)
+        else:
+            plt.plot(hours, dual_df[col], marker='x', linestyle='--', alpha=0.7, label=col)
+    # Graph features
+    plt.xlabel('Hour of Day')
+    plt.ylabel('Dual Value')
+    plt.title(title)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend()
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
 
 # example function to save model results in a specified directory
 def save_model_results():

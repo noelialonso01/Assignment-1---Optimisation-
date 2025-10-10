@@ -125,7 +125,7 @@ class OptModel2:
     def _set_objective(self):
     ### sets relevant objective function based on question 
         if self.question == "question_1a":
-            obj_fn = gp.quicksum(
+            obj_fn = -gp.quicksum(
                 self._at(self.data.price, t)       * self.vars.v_import[t]
               + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
               - self._at(self.data.price, t)       * self.vars.v_export[t]
@@ -137,7 +137,7 @@ class OptModel2:
         if self.question == "question_1b":
             ####   NEED TO ADJUST THIS #########
             #self.alpha = 10
-            obj_fn = gp.quicksum(
+            obj_fn = -gp.quicksum(
                 self._at(self.data.price, t)       * self.vars.v_import[t]
               + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
               - self._at(self.data.price, t)       * self.vars.v_export[t]
@@ -147,7 +147,7 @@ class OptModel2:
               + self.data.alpha * self.vars.v_deviation[t] for t in self.T
             )
 
-        self.model.setObjective(obj_fn, GRB.MINIMIZE)
+        self.model.setObjective(obj_fn, GRB.MAXIMIZE)
 
     def _build(self, alpha: float = 100):
         ### variables are defined here, and denoted with v_
@@ -171,31 +171,22 @@ class OptModel2:
 
         # constraints (store handles so we can read Pi and update RHS later)
         for i in self.T:
-            self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]"
-                                                         )
-            self.cons.imp_excess[i] = self.model.addConstr(
-                v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]"
-            )
-            self.cons.exp_excess[i] = self.model.addConstr(
-                v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]"
-            )
-            self.cons.power_balance[i] = self.model.addLConstr(
-                v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}"
-            )
+            self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]")
+            self.cons.imp_excess[i] = self.model.addConstr(v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]")
+            self.cons.exp_excess[i] = self.model.addConstr(v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]")
+            self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
             self.cons.load_max[i] = self.model.addConstr(v_load[i] <= self.data.load_max, name=f"load_max[{i}]")
             self.cons.load_min[i] = self.model.addConstr(v_load[i] >= self.data.load_min, name=f"load_min[{i}]")
 
         # total energy constraint (not per-hour)
         if self.question == "question_1a":
             self.cons.emin_constraint = self.model.addConstr(
-                gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint"
-            )
+                gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
         if self.question == "question_1b":
             print("Load profile is set to:", self.data.load_profile)
             for i in self.T:
-                self.cons.deviation_pos[i] = self.model.addConstr(v_deviation[i] >= v_load[i] - self.data.load_profile[i]*self.data.load_max, name="deviation_pos")
-                self.cons.deviation_neg[i] = self.model.addConstr(v_deviation[i] >= -(v_load[i] - self.data.load_profile[i]*self.data.load_max), name="deviation_pos")
-                #self.cons.deviation[i] = self.model.addConstr(v_deviation[i] = abs(v_load[i] - self.data.load_profile[i]*self.data.load_max), name="deviation")
+                self.cons.deviation_pos[i] = self.model.addConstr(0 >= v_load[i] - self.data.load_profile[i]*self.data.load_max - v_deviation[i], name="deviation_pos")
+                self.cons.deviation_neg[i] = self.model.addConstr(0 >= -(v_load[i] - self.data.load_profile[i]*self.data.load_max) - v_deviation[i], name="deviation_pos")
         self._set_objective()
 
     def update_data(self, data_name: str, new_value):
@@ -235,9 +226,8 @@ class OptModel2:
             self._set_objective()
 
         self.model.update()
-
+    """
     def store_results(self):
-        """Build and stash results as DataFrames (primal & duals) + meta dict."""
         idx = pd.RangeIndex(len(self.T), name="Hour")
 
         # --- primal (kWh series) --- 
@@ -270,6 +260,7 @@ class OptModel2:
         }
 
         return self.results_df, self.duals_df, self.meta
+    """
 
     def solve(self, verbose: bool = False):
         if not verbose:
