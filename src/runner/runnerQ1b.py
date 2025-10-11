@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 
-class RunnerQ2:
+class RunnerQ1b:
     """
     Handles configuration setting, data loading and preparation, model(s) execution, results saving and ploting
     """
@@ -83,7 +83,7 @@ class RunnerQ2:
             deviation_neg_dual_dict[key] = deviation_neg_dual
             deviations_columns_dict[key] = deviations
             load_profile_dict[key] = load
-            expenditure_list.append(expenditure)
+            expenditure_list.append(-expenditure)
         deviations = pd.DataFrame(deviations_columns_dict, index=pd.Index(range(24), name="Hour"))
         load = pd.DataFrame(load_profile_dict, index=pd.Index(range(24), name="Hour"))
         deviation_pos_dual = pd.DataFrame(deviation_pos_dual_dict, index=pd.Index(range(24), name="Hour"))

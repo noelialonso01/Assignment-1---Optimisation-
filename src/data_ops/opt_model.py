@@ -22,7 +22,15 @@ class InputData:
         emin: float,
         load_min: list[float],
         load_max: list[float],
-        load_profile: list[float]):
+        load_profile: list[float],
+        # optional battery parameters
+        SOC_ratio_ini: float | None = None,         
+        SOC_ratio_fin: float | None = None,         
+        bat_capacity: float | None = None,          
+        max_charge_power_ratio: float | None = None,    
+        max_discharge_power_ratio: float | None = None, 
+        charge_eff: float | None = None,            
+        discharge_eff: float | None = None):
 
         self.T = list(range(24))
         self.price = price
@@ -37,6 +45,15 @@ class InputData:
         self.load_max = load_max
         self.emin = emin
         self.load_profile = load_profile
+        
+        #optional battery parameters
+        self.SOC_ratio_ini = SOC_ratio_ini
+        self.SOC_ratio_fin = SOC_ratio_fin
+        self.bat_capacity = bat_capacity
+        self.max_charge_power_ratio = max_charge_power_ratio
+        self.max_discharge_power_ratio = max_discharge_power_ratio
+        self.charge_eff = charge_eff
+        self.discharge_eff = discharge_eff
 
 class DataProcessor():
 
@@ -44,20 +61,7 @@ class DataProcessor():
         self.question = question
         self.input_path = input_path
         data = DataLoader(input_path=input_path, question=question)
-        # Load all data to self.all.data
-        self.all_data = data._load_dataset(question)
         self.data_loader = data
-
-    def getVariables(self):
-
-        appliance_params = self.data_loader._load_data_file(self.question, "appliance_params.json")
-        appliance_params_unwrapped = appliance_params["appliance_params"]
-        variables = [key for key, value in appliance_params_unwrapped.items() if value is not None]
-        variables.extend(["import", "export", "exp_excess", "imp_excess"])
-        variables = pd.DataFrame({"variables": variables})
-        self.variables = variables
-
-        return variables
 
     def getCoefficients(self):
         appliance_params = self.data_loader._load_data_file(self.question, "appliance_params.json")
@@ -90,9 +94,22 @@ class DataProcessor():
         else:
             load_profile = [float(x) for x in (usage_preferences_unwrapped[0]["load_preferences"][0]["hourly_profile_ratio"])]
             emin = None
+        if self.question == "question_1c":
+            SOC_ratio_ini = float(usage_preferences_unwrapped[0]["storage_preferences"][0]["initial_soc_ratio"])
+            SOC_ratio_fin = float(usage_preferences_unwrapped[0]["storage_preferences"][0]["final_soc_ratio"])
+            bat_capacity = float(appliance_params_unwrapped["storage"][0]["storage_capacity_kWh"])
+            max_charge_power_ratio = float(appliance_params_unwrapped["storage"][0]["max_charging_power_ratio"])
+            max_discharge_power_ratio = float(appliance_params_unwrapped["storage"][0]["max_discharging_power_ratio"])
+            charge_eff = float(appliance_params_unwrapped["storage"][0]["charging_efficiency"])
+            discharge_eff = float(appliance_params_unwrapped["storage"][0]["discharging_efficiency"])
+            return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
+               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, SOC_ratio_ini, 
+               SOC_ratio_fin, bat_capacity, max_charge_power_ratio, max_discharge_power_ratio, charge_eff, discharge_eff)
+        else:
         #print("emin is:", emin, "load max is:", load_max, "load min is:", load_min, "pmax is:", pmax, "pmaxhourly is:", pmaxhourly, "price is:", price, "imp tariff is:", imp_tariff, "exp tariff is:", exp_tariff, "max import is:", max_import, "max export is:", max_export, "excess imp tariff is:", excess_imp_tariff, "excess exp tariff is:", excess_exp_tariff,)
-        return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
+            return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
                excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile)
+    
 
 class Expando(object):
     pass
@@ -115,6 +132,7 @@ class OptModel2:
         self.cons.deviation_neg = {}
         self.T = self.data.T  # Time periods (0-23 hours)
 
+
     # helper: index if vector, otherwise treat as scalar
     def _at(self, x, t):
         try:
@@ -135,8 +153,17 @@ class OptModel2:
               for t in self.T
             )
         if self.question == "question_1b":
-            ####   NEED TO ADJUST THIS #########
-            #self.alpha = 10
+            obj_fn = -gp.quicksum(
+                self._at(self.data.price, t)       * self.vars.v_import[t]
+              + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
+              - self._at(self.data.price, t)       * self.vars.v_export[t]
+              + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
+              + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
+              + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
+              + self.data.alpha * self.vars.v_deviation[t] for t in self.T
+            )
+        if self.question == "question_1c":
+            ### same as 1b i think?
             obj_fn = -gp.quicksum(
                 self._at(self.data.price, t)       * self.vars.v_import[t]
               + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
@@ -147,9 +174,10 @@ class OptModel2:
               + self.data.alpha * self.vars.v_deviation[t] for t in self.T
             )
 
+
         self.model.setObjective(obj_fn, GRB.MAXIMIZE)
 
-    def _build(self, alpha: float = 100):
+    def _build(self, alpha: float = 10):
         ### variables are defined here, and denoted with v_
         self.data.alpha = alpha
         v_load = self.model.addVars(self.T, lb=0.0, name=f"v_load")
@@ -159,6 +187,10 @@ class OptModel2:
         v_imp_excess = self.model.addVars(self.T, lb=0.0, name="v_imp_excess")
         v_exp_excess = self.model.addVars(self.T, lb=0.0, name="v_exp_excess")
         v_deviation = self.model.addVars(self.T, lb=0.0, name="v_deviation")
+        v_SOC = self.model.addVars(self.T, lb=0.0, name="v_SOC")
+        v_E_charged = self.model.addVars(self.T, lb=0.0, name="v_E_charged")
+        v_E_discharged = self.model.addVars(self.T, lb=0.0, name="v_E_discharged")
+
 
         # store variable handles
         self.vars.v_load = v_load
@@ -168,27 +200,98 @@ class OptModel2:
         self.vars.v_imp_excess = v_imp_excess
         self.vars.v_exp_excess = v_exp_excess
         self.vars.v_deviation = v_deviation
+        self.vars.v_SOC = v_SOC
+        self.vars.v_E_charged = v_E_charged
+        self.vars.v_E_discharged = v_E_discharged
 
         # constraints (store handles so we can read Pi and update RHS later)
         for i in self.T:
             self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]")
             self.cons.imp_excess[i] = self.model.addConstr(v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]")
             self.cons.exp_excess[i] = self.model.addConstr(v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]")
-            self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
             self.cons.load_max[i] = self.model.addConstr(v_load[i] <= self.data.load_max, name=f"load_max[{i}]")
             self.cons.load_min[i] = self.model.addConstr(v_load[i] >= self.data.load_min, name=f"load_min[{i}]")
 
-        # total energy constraint (not per-hour)
         if self.question == "question_1a":
+            # total energy constraint (not per-hour)
             self.cons.emin_constraint = self.model.addConstr(
                 gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
+            for i in self.T:
+                self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
         if self.question == "question_1b":
             print("Load profile is set to:", self.data.load_profile)
             for i in self.T:
                 self.cons.deviation_pos[i] = self.model.addConstr(0 >= v_load[i] - self.data.load_profile[i]*self.data.load_max - v_deviation[i], name="deviation_pos")
                 self.cons.deviation_neg[i] = self.model.addConstr(0 >= -(v_load[i] - self.data.load_profile[i]*self.data.load_max) - v_deviation[i], name="deviation_pos")
+                self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
+        if self.question == "question_1c":
+            # intial and final SOC constraints, not for each hour
+            self.cons.SOC_ini = self.model.addConstr(v_SOC[0] == self.data.SOC_ratio_ini*self.data.bat_capacity + (self.data.charge_eff*v_E_charged[0] - v_E_discharged[0]/self.data.discharge_eff), name="SOC_ini")
+            self.cons.SOC_fin = self.model.addConstr(v_SOC[23] == self.data.SOC_ratio_fin*self.data.bat_capacity, name="SOC_fin")
+            for i in self.T:
+                self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] + v_E_charged[i] - v_E_discharged[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
+                self.cons.deviation_pos[i] = self.model.addConstr(0 >= v_load[i] - self.data.load_profile[i]*self.data.load_max - v_deviation[i], name=f"deviation_pos_{i}")
+                self.cons.deviation_neg[i] = self.model.addConstr(0 >= -(v_load[i] - self.data.load_profile[i]*self.data.load_max) - v_deviation[i], name=f"deviation_pos_{i}")
+                self.cons.SOC_max = self.model.addConstr(0 <= self.data.bat_capacity - v_SOC[i], name=f"SOC_dynamics_{i}")
+                self.cons.charge_max = self.model.addConstr(0 <= self.data.max_charge_power_ratio*self.data.bat_capacity - v_E_charged[i], name=f"charge_max_{i}")
+                self.cons.discharge_max = self.model.addConstr(0 <= self.data.max_discharge_power_ratio*self.data.bat_capacity - v_E_discharged[i], name=f"discharge_max_{i}")
+            for i in list(range(1,24,1)):
+                ### only does SOC dynamics for hours 1-23, as 0 is handled by initial SOC constraint
+                self.cons.SOC_dynamics = self.model.addConstr(v_SOC[i] == v_SOC[i-1] + (self.data.charge_eff*v_E_charged[i] - v_E_discharged[i]/self.data.discharge_eff), name=f"SOC_dynamics_{i}")
+                
+
         self._set_objective()
 
+    def solve(self, verbose: bool = False):
+        if not verbose:
+            self.model.Params.OutputFlag = 0
+        self.model.optimize()
+        if self.model.Status not in (GRB.OPTIMAL, GRB.SUBOPTIMAL):
+            raise RuntimeError(f"Gurobi status: {self.model.Status}")
+
+        # Collect and store results in self.results
+        v = self.vars
+        self.results.v_load = np.array([v.v_load[i].X for i in self.T], dtype=float)
+        self.results.v_prod = np.array([v.v_prod[i].X for i in self.T], dtype=float)
+        self.results.v_import = np.array([v.v_import[i].X for i in self.T], dtype=float)
+        self.results.v_export = np.array([v.v_export[i].X for i in self.T], dtype=float)
+        self.results.v_imp_excess = np.array([v.v_imp_excess[i].X for i in self.T], dtype=float)
+        self.results.v_exp_excess = np.array([v.v_exp_excess[i].X for i in self.T], dtype=float)
+        self.results.v_deviation = np.array([v.v_deviation[i].X for i in self.T], dtype=float)
+        self.results.obj = float(self.model.ObjVal)
+        self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
+        if self.question == "question_1c":
+            self.results.v_SOC = np.array([v.v_SOC[i].X for i in self.T], dtype=float)
+            self.results.v_E_charged = np.array([v.v_E_charged[i].X for i in self.T], dtype=float)
+            self.results.v_E_discharged = np.array([v.v_E_discharged[i].X for i in self.T], dtype=float)
+
+        duals = Expando()
+        # per-hour constraints -> arrays length |T|
+        duals.prod_max       = np.array([self.cons.prod_max[i].Pi       for i in self.T], dtype=float)
+        duals.load_max       = np.array([self.cons.load_max[i].Pi       for i in self.T], dtype=float)
+        duals.load_min       = np.array([self.cons.load_min[i].Pi       for i in self.T], dtype=float)
+        duals.imp_excess    = np.array([self.cons.imp_excess[i].Pi    for i in self.T], dtype=float)
+        duals.exp_excess    = np.array([self.cons.exp_excess[i].Pi    for i in self.T], dtype=float)
+        duals.power_balance = np.array([self.cons.power_balance[i].Pi for i in self.T], dtype=float)
+        if self.question == "question_1b":
+            duals.deviation_pos = np.array([self.cons.deviation_pos[i].Pi for i in self.T], dtype=float)
+            duals.deviation_neg = np.array([self.cons.deviation_neg[i].Pi for i in self.T], dtype=float)
+        # single daily energy constraint -> scalar
+        if self.question == "question_1a":
+            duals.emin_constraint = float(self.cons.emin_constraint.Pi)
+        
+        if self.question == "question_1c":
+            duals.SOC_ini = float(self.cons.SOC_ini.Pi)
+            duals.SOC_fin = float(self.cons.SOC_fin.Pi)
+            duals.SOC_max = np.array([self.cons.SOC_max.Pi for i in self.T], dtype=float)
+            duals.charge_max = np.array([self.cons.charge_max.Pi for i in self.T], dtype=float)
+            duals.discharge_max = np.array([self.cons.discharge_max.Pi for i in self.T], dtype=float)
+            duals.deviation_pos = np.array([self.cons.deviation_pos[i].Pi for i in self.T], dtype=float)
+            duals.deviation_neg = np.array([self.cons.deviation_neg[i].Pi for i in self.T], dtype=float)
+            
+        self.results.duals = duals
+        return self.results
+    
     def update_data(self, data_name: str, new_value):
         # update Python-side data
         if not hasattr(self.data, data_name):
@@ -224,8 +327,14 @@ class OptModel2:
         elif data_name in {"price", "imp_tariff", "exp_tariff", "excess_imp_tariff", "excess_exp_tariff", "alpha"}:
             # prices/tariffs affect the objective coefficients
             self._set_objective()
+        elif data_name == "load_profile":
+            for i in self.T:
+                # Rebuild the RHS if you changed load_profile
+                self.cons.deviation_pos[i].RHS = 0
+                self.cons.deviation_neg[i].RHS = 0
 
         self.model.update()
+    
     """
     def store_results(self):
         idx = pd.RangeIndex(len(self.T), name="Hour")
@@ -261,43 +370,6 @@ class OptModel2:
 
         return self.results_df, self.duals_df, self.meta
     """
-
-    def solve(self, verbose: bool = False):
-        if not verbose:
-            self.model.Params.OutputFlag = 0
-        self.model.optimize()
-        if self.model.Status not in (GRB.OPTIMAL, GRB.SUBOPTIMAL):
-            raise RuntimeError(f"Gurobi status: {self.model.Status}")
-
-        # Collect and store results in self.results
-        v = self.vars
-        self.results.v_load = np.array([v.v_load[i].X for i in self.T], dtype=float)
-        self.results.v_prod = np.array([v.v_prod[i].X for i in self.T], dtype=float)
-        self.results.v_import = np.array([v.v_import[i].X for i in self.T], dtype=float)
-        self.results.v_export = np.array([v.v_export[i].X for i in self.T], dtype=float)
-        self.results.v_imp_excess = np.array([v.v_imp_excess[i].X for i in self.T], dtype=float)
-        self.results.v_exp_excess = np.array([v.v_exp_excess[i].X for i in self.T], dtype=float)
-        self.results.v_deviation = np.array([v.v_deviation[i].X for i in self.T], dtype=float)
-        self.results.obj = float(self.model.ObjVal)
-        self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
-
-        duals = Expando()
-        # per-hour constraints -> arrays length |T|
-        duals.prod_max       = np.array([self.cons.prod_max[i].Pi       for i in self.T], dtype=float)
-        duals.load_max       = np.array([self.cons.load_max[i].Pi       for i in self.T], dtype=float)
-        duals.load_min       = np.array([self.cons.load_min[i].Pi       for i in self.T], dtype=float)
-        duals.imp_excess    = np.array([self.cons.imp_excess[i].Pi    for i in self.T], dtype=float)
-        duals.exp_excess    = np.array([self.cons.exp_excess[i].Pi    for i in self.T], dtype=float)
-        duals.power_balance = np.array([self.cons.power_balance[i].Pi for i in self.T], dtype=float)
-        if self.question == "question_1b":
-            duals.deviation_pos = np.array([self.cons.deviation_pos[i].Pi for i in self.T], dtype=float)
-            duals.deviation_neg = np.array([self.cons.deviation_neg[i].Pi for i in self.T], dtype=float)
-        # single daily energy constraint -> scalar
-        if self.question == "question_1a":
-            duals.emin_constraint = float(self.cons.emin_constraint.Pi)
-        
-        self.results.duals = duals
-        return self.results
     
     
 

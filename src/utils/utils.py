@@ -53,7 +53,7 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
     if not cols:
         raise ValueError("No numeric columns to plot.")
 
-    to_neg = [c for c in cols if ("load" in c.lower()) or ("export" in c.lower() and "import" not in c.lower())]
+    to_neg = [c for c in cols if ("load" in c.lower()) or ("export" in c.lower() and "import" not in c.lower()) or ("charged" in c.lower())]
     df_plot = df.copy()
     for c in to_neg:
         df_plot[c] = -df_plot[c]
