@@ -23,6 +23,7 @@ class InputData:
         load_min: list[float],
         load_max: list[float],
         load_profile: list[float],
+        pmin: float,
         # optional battery parameters
         SOC_ratio_ini: float | None = None,         
         SOC_ratio_fin: float | None = None,         
@@ -45,6 +46,7 @@ class InputData:
         self.load_max = load_max
         self.emin = emin
         self.load_profile = load_profile
+        self.pmin = pmin
         
         #optional battery parameters
         self.SOC_ratio_ini = SOC_ratio_ini
@@ -85,6 +87,7 @@ class DataProcessor():
         price = [float(x) for x in bus_params_unwrapped[0]["energy_price_DKK_per_kWh"]]
 
         pmax = float(appliance_params_unwrapped["DER"][0]["max_power_kW"])
+        pmin = float(appliance_params_unwrapped["DER"][0]["min_power_ratio"])*pmax
         pmaxhourly = [float(x)*pmax for x in DER_production_unwrapped[0]["hourly_profile_ratio"]]
         load_min = float(appliance_params_unwrapped["load"][0]["min_load_ratio"])*float(appliance_params_unwrapped["load"][0]["max_load_kWh_per_hour"])
         load_max = float(appliance_params_unwrapped["load"][0]["max_load_kWh_per_hour"])
@@ -103,12 +106,12 @@ class DataProcessor():
             charge_eff = float(appliance_params_unwrapped["storage"][0]["charging_efficiency"])
             discharge_eff = float(appliance_params_unwrapped["storage"][0]["discharging_efficiency"])
             return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
-               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, SOC_ratio_ini, 
+               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, pmin, SOC_ratio_ini, 
                SOC_ratio_fin, bat_capacity, max_charge_power_ratio, max_discharge_power_ratio, charge_eff, discharge_eff)
         else:
         #print("emin is:", emin, "load max is:", load_max, "load min is:", load_min, "pmax is:", pmax, "pmaxhourly is:", pmaxhourly, "price is:", price, "imp tariff is:", imp_tariff, "exp tariff is:", exp_tariff, "max import is:", max_import, "max export is:", max_export, "excess imp tariff is:", excess_imp_tariff, "excess exp tariff is:", excess_exp_tariff,)
             return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
-               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile)
+               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, pmin)
     
 
 class Expando(object):
@@ -130,6 +133,7 @@ class OptModel2:
         self.cons.load_min = {}
         self.cons.deviation_pos = {}
         self.cons.deviation_neg = {}
+        self.cons.prod_min = {}
         self.T = self.data.T  # Time periods (0-23 hours)
 
 
@@ -181,7 +185,7 @@ class OptModel2:
         ### variables are defined here, and denoted with v_
         self.data.alpha = alpha
         v_load = self.model.addVars(self.T, lb=0.0, name=f"v_load")
-        v_prod = self.model.addVars(self.T, lb=0.0, name="v_prod")
+        v_prod = self.model.addVars(self.T, lb=-GRB.INFINITY, name="v_prod")
         v_import = self.model.addVars(self.T, lb=0.0, name="v_import")
         v_export = self.model.addVars(self.T, lb=0.0, name="v_export")
         v_imp_excess = self.model.addVars(self.T, lb=0.0, name="v_imp_excess")
@@ -207,6 +211,7 @@ class OptModel2:
         # constraints (store handles so we can read Pi and update RHS later)
         for i in self.T:
             self.cons.prod_max[i] = self.model.addConstr(v_prod[i] <= self.data.pmaxhourly[i], name=f"prod_max[{i}]")
+            self.cons.prod_min[i] = self.model.addConstr(-v_prod[i] <= -self.data.pmin, name=f"prod_min[{i}]")
             self.cons.imp_excess[i] = self.model.addConstr(v_imp_excess[i] >= v_import[i] - self.data.max_import, name=f"imp_excess[{i}]")
             self.cons.exp_excess[i] = self.model.addConstr(v_exp_excess[i] >= v_export[i] - self.data.max_export, name=f"exp_excess[{i}]")
             self.cons.load_max[i] = self.model.addConstr(v_load[i] <= self.data.load_max, name=f"load_max[{i}]")
@@ -215,7 +220,7 @@ class OptModel2:
         if self.question == "question_1a":
             # total energy constraint (not per-hour)
             self.cons.emin_constraint = self.model.addConstr(
-                gp.quicksum(v_load[i] for i in self.T) >= self.data.emin, name="emin_constraint")
+                gp.quicksum(-v_load[i] for i in self.T) <= -self.data.emin, name="emin_constraint")
             for i in self.T:
                 self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
         if self.question == "question_1b":
@@ -268,6 +273,7 @@ class OptModel2:
         duals = Expando()
         # per-hour constraints -> arrays length |T|
         duals.prod_max       = np.array([self.cons.prod_max[i].Pi       for i in self.T], dtype=float)
+        duals.prod_min       = np.array([self.cons.prod_min[i].Pi       for i in self.T], dtype=float)
         duals.load_max       = np.array([self.cons.load_max[i].Pi       for i in self.T], dtype=float)
         duals.load_min       = np.array([self.cons.load_min[i].Pi       for i in self.T], dtype=float)
         duals.imp_excess    = np.array([self.cons.imp_excess[i].Pi    for i in self.T], dtype=float)
@@ -334,42 +340,6 @@ class OptModel2:
                 self.cons.deviation_neg[i].RHS = 0
 
         self.model.update()
-    
-    """
-    def store_results(self):
-        idx = pd.RangeIndex(len(self.T), name="Hour")
-
-        # --- primal (kWh series) --- 
-        self.results_df = pd.DataFrame({
-            "Load (kWh)":          np.asarray(self.results.v_load, dtype=float),
-            "Production (kWh)":    np.asarray(self.results.v_prod, dtype=float),
-            "Import (kWh)":        np.asarray(self.results.v_import, dtype=float),
-            "Export (kWh)":        np.asarray(self.results.v_export, dtype=float),
-            "Import Excess (kWh)": np.asarray(self.results.v_imp_excess, dtype=float),
-            "Export Excess (kWh)": np.asarray(self.results.v_exp_excess, dtype=float),
-            "Price (DKK/kWh)":     np.asarray(self.results.prices, dtype=float).reshape(-1),
-        }, index=idx)
-
-        # --- duals (shadow prices) ---
-        d = self.results.duals
-        der = getattr(d, "prod_max", getattr(d, "prod_max", None))
-        self.duals_df = pd.DataFrame({
-            "prod_max":       np.asarray(der, dtype=float),
-            "load_max":       np.asarray(der, dtype=float),
-            "load_min":       np.asarray(der, dtype=float),
-            "imp_excess":    np.asarray(d.imp_excess, dtype=float),
-            "exp_excess":    np.asarray(d.exp_excess, dtype=float),
-            "power_balance": np.asarray(d.power_balance, dtype=float),
-        }, index=idx)
-
-        # --- meta (scalars) ---
-        self.meta = {
-            "objective_value": float(self.results.obj),
-            "dual_emin_constraint": float(d.emin_constraint),
-        }
-
-        return self.results_df, self.duals_df, self.meta
-    """
     
     
 

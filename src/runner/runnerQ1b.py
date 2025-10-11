@@ -5,6 +5,7 @@ from utils.utils import plot_all_columns_one_graph
 from utils.utils import plot_objective_value_sensitivity
 from utils.utils import plot_load_scenarios
 from utils.utils import plot_dual_scenarios
+from utils.utils import plot_all_duals
 from data_ops.opt_model import DataProcessor
 from data_ops.opt_model import OptModel2
 from pathlib import Path
@@ -32,19 +33,25 @@ class RunnerQ1b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            "Price (DKK/kWh)": results.prices
+            "Deviation": results.v_deviation,
+            #"Price (DKK/kWh)": results.prices
         }, index=pd.Index(range(24), name="Hour"))
-        
         deviations = results.v_deviation
         obj_value = results.obj
-        expenditure = obj_value - sum(deviations[i]*100 for i in range(len(deviations)))
-        print(f"Total daily expenditure for question 1)a)iv) (DKK): {expenditure}")
-        print("Deviations from the average load profile (in kW) for each hour:")
-        for hour, deviation in enumerate(deviations):
-            print(f"Hour {hour}: Deviation = {deviation:.4f} kW")
-        total_load = sum(results.v_load[i] for i in range(len(results.v_load)))
-        print("Total daily load is:", total_load)
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)iv)", show=True, show_price_line=False,title="Stacked flows vs time Q1)b) (original data used)")
+        expenditure = -obj_value - sum(deviations[i]*100 for i in range(len(deviations)))
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)iv)Primal", show=True, show_price_line=True,
+                                   line_label="Deviation",title=f"Primal Results Q1)b) (original data), daily expenditure = {expenditure:.2f} DKK")
+
+        dual_results_df = pd.DataFrame({
+            "Load UB Dual (α_up)": results.duals.load_max,
+            "Power Balance Dual (λ)": results.duals.power_balance,
+            "Production UB Dual (μ_up) ": results.duals.prod_max,
+            "Deviation Positive Dual (η+) ": results.duals.deviation_pos,
+            "Deviation Negative Dual (η-)": results.duals.deviation_neg,
+        }, index=pd.Index(range(24), name="Hour"))
+        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)iv)DualResults", show=True, title="Dual Results 1)b)iv")
+
+        
     pass
 
     def question1_b_v_varying_alpha(self):
