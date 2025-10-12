@@ -2,10 +2,8 @@ from pathlib import Path
 from typing import Dict, List
 
 from utils.utils import plot_all_columns_one_graph
-from utils.utils import plot_all_duals
-from utils.utils import plot_objective_value_sensitivity
-from utils.utils import plot_load_scenarios
-from utils.utils import plot_dual_scenarios
+from utils.utils import plot_all_columns_one_graph_2b
+from utils.utils import plot_price_scenarios
 from data_ops.opt_model import DataProcessor
 from data_ops.opt_model import OptModel2
 from pathlib import Path
@@ -22,7 +20,7 @@ class RunnerQ2b:
         """Initialize the Runner."""
         self.path = path
         self.question = "question_2b"
-    def question1_c(self):
+    def question2_b(self):
         data = DataProcessor(input_path=self.path, question=self.question).getCoefficients()
         model = OptModel2(data, self.question)
         model._build()
@@ -46,22 +44,118 @@ class RunnerQ2b:
         obj_value = results.obj
         expenditure = -obj_value - sum(deviations[i]*5 for i in range(len(deviations)))
         battery_size = results.v_battery_size
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)c)PrimalResultsw=5,prices=original", show=True, show_price_line=True,
-                                   line_label="Battery SOC (kWh)",title=f"Stacked flows vs time Q1)c) (w=5, prices=original) daily expenditure = {expenditure:.2f} DKK, battery size = {battery_size:.2f} kWh")
+        plot_all_columns_one_graph_2b(results_df, save_path=Path(self.path)/"figures"/"2)b)PrimalResultsw=5,prices=original", show=True, show_price_line=True,
+                                   line_label="Battery SOC (kWh)",title=f"Stacked flows vs time Q2)b) (w=5, prices=original) daily expenditure = {expenditure:.2f} DKK, battery size = {battery_size:.2f} kWh")
         
-        dual_results_df = pd.DataFrame({
-            #"Load UB Dual (α_up)": results.duals.load_max,
-            "Power Balance Dual (λ)": results.duals.power_balance,
-            "Production UB Dual (μ_up) ": results.duals.prod_max,
-            "Deviation Dual (η) ": results.duals.deviation,
-            #"Production LB dual (μ_low)": results.duals.prod_min,
-            #"SOC min dual (ψ_low)": results.duals.SOC_min,
-            "SOC max dual (ψ_up)": results.duals.SOC_max,
-            "SOC initial dual (ς_begin)": results.duals.SOC_ini,
-            "SOC final dual (ς_end)": results.duals.SOC_fin,
-            "Charge max dual (φ_c,up)": results.duals.charge_max,
-            "Discharge max dual (φ_r,up)": results.duals.discharge_max,
-            "SOC dynamics dual (ζ)": results.duals.SOC_dynamics,
+        """
+        try negative prices here
+        """
+        variable_name = "price" 
+        scenario_price_profile = [1.1, 1.05, 1.0, 0.9, -0.85, -1.01, 1.05, 1.2, 1.4, 1.6,
+                                1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 2.5,
+                                2.2, 1.8, 1.4, 1.2]
+        model.update_data(variable_name, scenario_price_profile)
+        model._build()
+        results = model.solve(verbose=True)
+        results_df = pd.DataFrame({
+            "Load": results.v_load,
+            "Production": results.v_prod,
+            "Import": results.v_import,
+            "Export": results.v_export,
+            "Import Excess": results.v_imp_excess,
+            "Export Excess": results.v_exp_excess,
+            #"Price (DKK/kWh)": results.prices,
+            #"Charged to battery (kWh)": results.v_E_charged,
+            #"Discharged from battery (kWh)": results.v_E_discharged,
+            "Battery SOC (kWh)": results.v_SOC
         }, index=pd.Index(range(24), name="Hour"))
-        #plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)c)DualResultsw=5,prices=original", show=True, title="Dual Results 1)c) (w=5, prices=original)")
+        
+        deviations_pos = results.v_deviation_pos
+        deviations_neg = results.v_deviation_neg
+        deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
+        obj_value = results.obj
+        expenditure = -obj_value - sum(deviations[i]*5 for i in range(len(deviations)))
+        print(deviations)
+        battery_size = results.v_battery_size
+        plot_all_columns_one_graph_2b(results_df, save_path=Path(self.path)/"figures"/"2)b)PrimalResultsw=5,prices=someneg", show=True, show_price_line=True,
+                                   line_label="Battery SOC (kWh)",title=f"Stacked flows vs time Q2)b) (w=5, prices=some negative) daily expenditure = {expenditure:.2f} DKK, battery size = {battery_size:.2f} kWh")
+
+        """
+        try decreased prices in hours 4 and 5, but then increase by same amount later on
+        """
+        variable_name = "price" 
+        scenario_price_profile = [1.1, 1.05, 1.0, 0.9, 0.2, 0.3, 1.05, 1.2, 1.4, 1.6,
+                                1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 3.15,
+                                2.91, 1.8, 1.4, 1.2]
+        model.update_data(variable_name, scenario_price_profile)
+        model._build()
+        results = model.solve(verbose=True)
+        results_df = pd.DataFrame({
+            "Load": results.v_load,
+            "Production": results.v_prod,
+            "Import": results.v_import,
+            "Export": results.v_export,
+            "Import Excess": results.v_imp_excess,
+            "Export Excess": results.v_exp_excess,
+            #"Price (DKK/kWh)": results.prices,
+            #"Charged to battery (kWh)": results.v_E_charged,
+            #"Discharged from battery (kWh)": results.v_E_discharged,
+            "Battery SOC (kWh)": results.v_SOC
+        }, index=pd.Index(range(24), name="Hour"))
+        
+        deviations_pos = results.v_deviation_pos
+        deviations_neg = results.v_deviation_neg
+        deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
+        obj_value = results.obj
+        expenditure = -obj_value - sum(deviations[i]*5 for i in range(len(deviations)))
+        print(deviations)
+        battery_size = results.v_battery_size
+        plot_all_columns_one_graph_2b(results_df, save_path=Path(self.path)/"figures"/"2)b)PrimalResultsw=5,prices=extremepeaks", show=True, show_price_line=True,
+                                   line_label="Battery SOC (kWh)",title=f"Stacked flows vs time Q2)b) (w=5, prices=extreme peaks) daily expenditure = {expenditure:.2f} DKK, battery size = {battery_size:.2f} kWh")
+        
+        """
+        Now we run the scenario with alpha = 2 from 1)b)
+        """
+        variable_name = "alpha" 
+        alpha = 2
+        data = DataProcessor(input_path=self.path, question=self.question).getCoefficients()
+        model2 = OptModel2(data, self.question)
+        model2._build()
+        model2.update_data(variable_name, alpha)
+        model2._build()
+        results = model2.solve(verbose=True)
+        results_df = pd.DataFrame({
+            "Load": results.v_load,
+            "Production": results.v_prod,
+            "Import": results.v_import,
+            "Export": results.v_export,
+            "Import Excess": results.v_imp_excess,
+            "Export Excess": results.v_exp_excess,
+            #"Price (DKK/kWh)": results.prices,
+            #"Charged to battery (kWh)": results.v_E_charged,
+            #"Discharged from battery (kWh)": results.v_E_discharged,
+            "Battery SOC (kWh)": results.v_SOC
+        }, index=pd.Index(range(24), name="Hour"))
+        
+        deviations_pos = results.v_deviation_pos
+        deviations_neg = results.v_deviation_neg
+        deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
+        print("Deviations are:",deviations)
+        obj_value = results.obj
+        expenditure = -obj_value - sum(deviations[i]*5 for i in range(len(deviations)))
+        battery_size = results.v_battery_size
+        plot_all_columns_one_graph_2b(results_df, save_path=Path(self.path)/"figures"/"2)b)PrimalResultsw=2,prices=original", show=True, show_price_line=True,
+                                   line_label="Battery SOC (kWh)",title=f"Stacked flows vs time Q2)b) (w=2, prices=original) daily expenditure = {expenditure:.2f} DKK, , battery size = {battery_size:.2f} kWh")
+        price_scenario_dict = {
+            "original": [1.1, 1.05, 1.0, 0.9, 0.85, 1.01, 1.05, 1.2, 1.4, 1.6,
+                                1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 2.5,
+                                2.2, 1.8, 1.4, 1.2]
+            ,"some negative": [1.1, 1.05, 1.0, 0.9, -0.85, -1.01, 1.05, 1.2, 1.4, 1.6, 
+                         1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 2.5,
+                                2.2, 1.8, 1.4, 1.2]
+            ,"extreme peaks (= daily total of original)": [1.1, 1.05, 1.0, 0.9, 0.2, 0.3, 1.05, 1.2, 1.4, 1.6,
+                                1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 3.15,
+                                2.91, 1.8, 1.4, 1.2]    
+        }
+        plot_price_scenarios(price_scenario_dict, save_path=Path(self.path)/"figures"/"2)b)PriceScenarios", show=True, title="Price Scenarios Q2)b)")
         pass

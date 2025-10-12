@@ -108,6 +108,17 @@ class DataProcessor():
             return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
                excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, pmin, SOC_ratio_ini, 
                SOC_ratio_fin, bat_capacity, max_charge_power_ratio, max_discharge_power_ratio, charge_eff, discharge_eff)
+        if self.question == "question_2b":
+            SOC_ratio_ini = float(usage_preferences_unwrapped[0]["storage_preferences"][0]["initial_soc_ratio"])
+            SOC_ratio_fin = float(usage_preferences_unwrapped[0]["storage_preferences"][0]["final_soc_ratio"])
+            bat_capacity = float(appliance_params_unwrapped["storage"][0]["storage_capacity_kWh"])
+            max_charge_power_ratio = float(appliance_params_unwrapped["storage"][0]["max_charging_power_ratio"])
+            max_discharge_power_ratio = float(appliance_params_unwrapped["storage"][0]["max_discharging_power_ratio"])
+            charge_eff = float(appliance_params_unwrapped["storage"][0]["charging_efficiency"])
+            discharge_eff = float(appliance_params_unwrapped["storage"][0]["discharging_efficiency"])
+            return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
+               excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, pmin, SOC_ratio_ini, 
+               SOC_ratio_fin, bat_capacity, max_charge_power_ratio, max_discharge_power_ratio, charge_eff, discharge_eff)
         else:
         #print("emin is:", emin, "load max is:", load_max, "load min is:", load_min, "pmax is:", pmax, "pmaxhourly is:", pmaxhourly, "price is:", price, "imp tariff is:", imp_tariff, "exp tariff is:", exp_tariff, "max import is:", max_import, "max export is:", max_export, "excess imp tariff is:", excess_imp_tariff, "excess exp tariff is:", excess_exp_tariff,)
             return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
@@ -188,25 +199,25 @@ class OptModel2:
                 for t in self.T
             )
         if self.question == "question_2b":
-            obj_fn = -gp.quicksum(
+            obj_fn = -(gp.quicksum(
                 self._at(self.data.price, t)       * self.vars.v_import[t]
-              + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
-              - self._at(self.data.price, t)       * self.vars.v_export[t]
-              + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
-              + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
-              + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
-              + self.data.alpha * self.vars.v_deviation_pos[t]
-              + self.data.alpha * self.vars.v_deviation_neg[t] for t in self.T
-                + self.data.pi * self.vars.v_battery_size)
-            pass
+            + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
+            - self._at(self.data.price, t)       * self.vars.v_export[t]
+            + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
+            + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
+            + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
+            + self.data.alpha * self.vars.v_deviation_pos[t]
+            + self.data.alpha * self.vars.v_deviation_neg[t]
+                for t in self.T)
+            + self.data.pi * self.vars.v_battery_size)
 
 
         self.model.setObjective(obj_fn, GRB.MAXIMIZE)
 
-    def _build(self, alpha: float = 5, pi: float = 2):
+    def _build(self, alpha: float = 5, pi: float = 1):
+        self.data.alpha = alpha ### this is the penalty cost for deviations, omega in the report
+        self.data.pi = pi ### this is the cost per kWh of battery capacity, pi in the report
         ### variables are defined here, and denoted with v_
-        self.data.alpha = alpha
-        self.data.pi = pi
         v_load = self.model.addVars(self.T, lb=-GRB.INFINITY, name=f"v_load")
         v_prod = self.model.addVars(self.T, lb=-GRB.INFINITY, name="v_prod")
         v_import = self.model.addVars(self.T, lb=0.0, name="v_import")
@@ -304,10 +315,12 @@ class OptModel2:
         self.results.v_deviation_neg = np.array([v.v_deviation_neg[i].X for i in self.T], dtype=float)
         self.results.obj = float(self.model.ObjVal)
         self.results.prices = np.asarray(self.data.price, dtype=float).reshape(-1)
-        if self.question == "question_1c":
+        if self.question == "question_1c" or self.question == "question_2b":
             self.results.v_SOC = np.array([v.v_SOC[i].X for i in self.T], dtype=float)
             self.results.v_E_charged = np.array([v.v_E_charged[i].X for i in self.T], dtype=float)
             self.results.v_E_discharged = np.array([v.v_E_discharged[i].X for i in self.T], dtype=float)
+        if self.question == "question_2b":
+            self.results.v_battery_size = float(v.v_battery_size.X)
 
         duals = Expando()
         # per-hour constraints -> arrays length |T|
@@ -325,7 +338,7 @@ class OptModel2:
         if self.question == "question_1a":
             duals.emin_constraint = float(self.cons.emin_constraint.Pi)
         
-        if self.question == "question_1c":
+        if self.question == "question_1c" or self.question == "question_2b":
             duals.SOC_ini = np.array([float(self.cons.SOC_ini.Pi)] + [np.nan]*23, dtype=float)
             duals.SOC_fin = np.array([np.nan]*23 + [float(self.cons.SOC_fin.Pi)], dtype=float)
             duals.SOC_max = np.array([self.cons.SOC_max[i].Pi for i in self.T], dtype=float)

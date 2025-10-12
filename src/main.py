@@ -32,7 +32,7 @@ path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimis
 #Question_1c.question1_c()
 
 Question_2b = RunnerQ2b(path)
-Question_2b.question1_c()
+Question_2b.question2_b()
 
 
 

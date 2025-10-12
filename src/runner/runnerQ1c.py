@@ -3,9 +3,6 @@ from typing import Dict, List
 
 from utils.utils import plot_all_columns_one_graph
 from utils.utils import plot_all_duals
-from utils.utils import plot_objective_value_sensitivity
-from utils.utils import plot_load_scenarios
-from utils.utils import plot_dual_scenarios
 from data_ops.opt_model import DataProcessor
 from data_ops.opt_model import OptModel2
 from pathlib import Path
