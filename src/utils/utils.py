@@ -92,7 +92,12 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
         ax2.tick_params(axis="y", colors="red")
         ax2.spines["right"].set_color("red")
         ax2.set_ylabel(line_label, color="red")
-        ax2.set_ylim(-1.5, 3)
+        if line_label == "Price (DKK/kWh)":
+            ax2.set_ylim(-1.5, 3)
+        if line_label == "Deviation (kWh)":
+            ax2.set_ylim(-3, 3)
+        if line_label == "Battery SOC (kWh)":
+            ax2.set_ylim(0, 7)
         # Merge legends
         h2, l2 = ax2.get_legend_handles_labels()
         handles += h2
@@ -107,6 +112,7 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
     ax.set_title(title)
     ax.yaxis.set_minor_locator(AutoMinorLocator(4)) 
     ax.set_xticks(x, labels=x_labels)
+    ax.set_ylim(-3,3)
     ax.grid(True, which="major", axis="y")
     ax.grid(True, which="minor", axis="y", alpha=0.4)
     ax.legend()
@@ -257,6 +263,7 @@ def plot_all_duals(dual_dict, save_path: str | None = None, show: bool = True, t
         plt.plot(hours, dual_dict[key], marker=marker, linestyle=linestyle, alpha=0.7, label=key)
     # Graph features
     plt.xlabel('Hour of Day')
+    plt.xticks(hours)
     plt.ylabel('Dual Value')
     plt.title(title)
     plt.grid(True, linestyle='--', alpha=0.5)

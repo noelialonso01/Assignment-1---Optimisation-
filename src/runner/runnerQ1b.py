@@ -21,7 +21,7 @@ class RunnerQ1b:
         """Initialize the Runner."""
         self.path = path
         self.question = "question_1b"
-    def question1_b_iv(self):
+    def question1_b(self):
         data = DataProcessor(input_path=self.path, question=self.question).getCoefficients()
         model = OptModel2(data, self.question)
         model._build()
@@ -33,24 +33,62 @@ class RunnerQ1b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            "Deviation": results.v_deviation,
+            "Deviation Pos (kWh)": results.v_deviation_pos,
+            "Deviation Neg (kWh)": results.v_deviation_neg,
             #"Price (DKK/kWh)": results.prices
         }, index=pd.Index(range(24), name="Hour"))
-        deviations = results.v_deviation
+        deviations_pos = results.v_deviation_pos
+        deviations_neg = results.v_deviation_neg
+        deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
         obj_value = results.obj
-        expenditure = -obj_value - sum(deviations[i]*100 for i in range(len(deviations)))
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)iv)Primal", show=True, show_price_line=True,
-                                   line_label="Deviation",title=f"Primal Results Q1)b) (original data), daily expenditure = {expenditure:.2f} DKK")
+        expenditure = -(obj_value - sum(deviations[i]*10 for i in range(len(deviations))))
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=10", show=True, show_price_line=True,
+                                   line_label="Deviation Pos (kWh)",title=f"Primal Results Q1)b) pos line (w=10), daily expenditure = {expenditure:.2f} DKK")
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=10", show=True, show_price_line=True,
+                                   line_label="Deviation Neg (kWh)",title=f"Primal Results Q1)b) neg line (w=10), daily expenditure = {expenditure:.2f} DKK")
 
         dual_results_df = pd.DataFrame({
             "Load UB Dual (α_up)": results.duals.load_max,
             "Power Balance Dual (λ)": results.duals.power_balance,
             "Production UB Dual (μ_up) ": results.duals.prod_max,
-            "Deviation Positive Dual (η+) ": results.duals.deviation_pos,
-            "Deviation Negative Dual (η-)": results.duals.deviation_neg,
+            "Deviation Dual (η+) ": results.duals.deviation,
+            #"Deviation Negative Dual (η-)": results.duals.deviation_neg,
         }, index=pd.Index(range(24), name="Hour"))
-        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)iv)DualResults", show=True, title="Dual Results 1)b)iv")
+        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)DualResultsw=10", show=True, title="Dual Results 1)b) (w=10)")
 
+        variable_name = 'alpha'
+        alpha = 0.5
+        model.update_data(variable_name, alpha)
+        results = model.solve(verbose=True)
+        results_df = pd.DataFrame({
+            "Load": results.v_load,
+            "Production": results.v_prod,
+            "Import": results.v_import,
+            "Export": results.v_export,
+            "Import Excess": results.v_imp_excess,
+            "Export Excess": results.v_exp_excess,
+            "Deviation Pos (kWh)": results.v_deviation_pos,
+            "Deviation Neg (kWh)": results.v_deviation_neg,
+            #"Price (DKK/kWh)": results.prices
+        }, index=pd.Index(range(24), name="Hour"))
+        deviations_pos = results.v_deviation_pos
+        deviations_neg = results.v_deviation_neg
+        deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
+        obj_value = results.obj
+        expenditure = -(obj_value - sum(deviations[i]*alpha for i in range(len(deviations))))
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=2", show=True, show_price_line=True,
+                                   line_label="Deviation Pos (kWh)",title=f"Primal Scenario Results pos line Q1)b) (w=2), daily expenditure = {expenditure:.2f} DKK")
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=2", show=True, show_price_line=True,
+                                   line_label="Deviation Neg (kWh)",title=f"Primal Scenario Results neg line Q1)b) (w=2), daily expenditure = {expenditure:.2f} DKK")
+
+        dual_results_df = pd.DataFrame({
+            "Load UB Dual (α_up)": results.duals.load_max,
+            "Power Balance Dual (λ)": results.duals.power_balance,
+            "Production UB Dual (μ_up) ": results.duals.prod_max,
+            "Deviation Dual (η+) ": results.duals.deviation,
+            #"Deviation Negative Dual (η-)": results.duals.deviation_neg,
+        }, index=pd.Index(range(24), name="Hour"))
+        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)DualResultsw=2", show=True, title="Dual Scenario Results 1)b) (w=2)")
         
     pass
 

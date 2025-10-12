@@ -2,11 +2,11 @@ from pathlib import Path
 from typing import Dict, List
 
 from utils.utils import plot_all_columns_one_graph
-from utils.utils import plot_objective_value_sensitivity
-from utils.utils import plot_emin_sensitivity
-from utils.utils import plot_price_scenarios
-from utils.utils import plot_load_scenarios
-from utils.utils import plot_dual_scenarios
+#from utils.utils import plot_objective_value_sensitivity
+#from utils.utils import plot_emin_sensitivity
+#from utils.utils import plot_price_scenarios
+#from utils.utils import plot_load_scenarios
+#from utils.utils import plot_dual_scenarios
 from utils.utils import plot_all_duals
 from data_ops.opt_model import DataProcessor
 from data_ops.opt_model import OptModel2
@@ -38,7 +38,9 @@ class RunnerQ1a:
             "Price (DKK/kWh)": results.prices
         }, index=pd.Index(range(24), name="Hour"))
         expenditure = -results.obj
-        plot_all_columns_one_graph(primal_results_df, save_path=Path(self.path)/"figures"/"1)a)PrimalResultsOGCosts", show=True, show_price_line=True,title=f"Primal Results 1)a) (original cost structure), Daily Expenditure = {expenditure:.2f} DKK")
+        print(primal_results_df)
+        plot_all_columns_one_graph(primal_results_df, save_path=Path(self.path)/"figures"/"1)a)PrimalResultsOGCosts", show=True, show_price_line=True,
+                                   line_label="Price (DKK/kWh)",title=f"Primal Results 1)a) (original cost structure), Daily Expenditure = {expenditure:.2f} DKK")
         
         dual_results_df = pd.DataFrame({
             "Power Balance Dual (λ)": results.duals.power_balance,
@@ -47,17 +49,14 @@ class RunnerQ1a:
             "Production UB dual (μ_up) ": results.duals.prod_max,
             "Production LB dual (μ_low)": results.duals.prod_min,
         }, index=pd.Index(range(24), name="Hour"))
-        #plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)a)DualResultsOGCosts", show=True, title="Dual Results 1)a) (original cost structure)")
-        
+        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)a)DualResultsOGCosts", show=True, title="Dual Results 1)a) (original cost structure)")
+
         variable_name = "price" 
         scenario_price_profile = [1.1, 1.05, -1.0, -0.9, -0.85, 1.01, 1.05, 1.2, 1.4, 1.6,
                                 1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 2.5,
                                 2.2, 1.8, 1.4, 1.2]
-        data2 = copy.deepcopy(data)
-        model2 = OptModel2(data2, self.question)
-        model2._build()
-        model2.update_data(variable_name, scenario_price_profile)
-        results2 = model2.solve(verbose=True)
+        model.update_data(variable_name, scenario_price_profile)
+        results2 = model.solve(verbose=True)
         primal_results_scenario_df = pd.DataFrame({
             "Load": results2.v_load,
             "Production": results2.v_prod,
@@ -77,7 +76,12 @@ class RunnerQ1a:
             "Production UB dual (μ_up) ": results2.duals.prod_max,
             "Production LB dual (μ_low)": results2.duals.prod_min,
         }, index=pd.Index(range(24), name="Hour"))
-        #plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)a)DualResultsnegprices", show=True, title="Dual Results 1)a) (introducing some negative prices)")
+        plot_all_duals(dual_results_scenario_df, save_path=Path(self.path)/"figures"/"1)a)DualResultsnegprices", show=True, title="Dual Results 1)a) (introducing some negative prices)")
+        
+        pass
+
+
+    def question1_a_scenario(self):
         pass
 
 

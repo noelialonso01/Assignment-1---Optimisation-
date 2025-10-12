@@ -21,11 +21,11 @@ from pathlib import Path
 """Here you need to set your path to the data folder to be able to run the code below"""
 path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimisation-\data"
 
-Question_1a = RunnerQ1a(path)
-Question_1a.question1_a()
+#Question_1a = RunnerQ1a(path)
+#Question_1a.question1_a()
 
-#Question_1b = RunnerQ1b(path)
-#Question_1b.question1_b_iv()
+Question_1b = RunnerQ1b(path)
+Question_1b.question1_b()
 #Question_1b.question1_b_v_varying_alpha()
 
 #Question_1c = RunnerQ1c(path)
