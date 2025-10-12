@@ -52,6 +52,8 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
                                line_label: str = "Price (DKK/kWh)"):
     if show_price_line == True:
         price_ser = df.pop(line_label)
+        if line_label == "Deviation Down (kWh)":
+            price_ser2 = df.pop("Deviation Up (kWh)")
     cols = [c for c in df.columns if not df[c].dropna().empty]
     if not cols:
         raise ValueError("No numeric columns to plot.")
@@ -88,9 +90,13 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
     if show_price_line:
         ax2 = ax.twinx()
         price_line, = ax2.plot(x, price_ser.reindex(df.index).to_numpy(dtype=float), marker="x", color="red", linestyle="--" ,label=line_label)
+        if line_label == "Deviation Down (kWh)":
+            ax2.plot(x, price_ser2.reindex(df.index).to_numpy(dtype=float), marker="o", color="purple", linestyle="--" ,label="Deviation Up (kWh)")
         price_line.set_zorder(3)  # draw line above bars
         ax2.tick_params(axis="y", colors="red")
         ax2.spines["right"].set_color("red")
+        if line_label == "Deviation Down (kWh)":
+            line_label = "Deviation (kWh)" 
         ax2.set_ylabel(line_label, color="red")
         if line_label == "Price (DKK/kWh)":
             ax2.set_ylim(-1.5, 3)
@@ -255,19 +261,19 @@ def plot_dual_scenarios(dual_df, save_path: str | None = None, show: bool = True
 def plot_all_duals(dual_dict, save_path: str | None = None, show: bool = True, title: str = "Dual values for the different price scenarios"):
     hours = np.arange(24)
     plt.figure(figsize=(12, 6))
-    markers = ['o', 'x', 's', '^', 'v', 'D', '*', 'p', '+', '>']
+    markers = ['o', 'x', 's', '^', 'v', '*', 'D', 'p', '+', '>', 'h']
     linestyles = ['-', '--', '-.', ':']
     for idx, key in enumerate(dual_dict):
         marker = markers[idx % len(markers)]
         linestyle = linestyles[idx % len(linestyles)]
-        plt.plot(hours, dual_dict[key], marker=marker, linestyle=linestyle, alpha=0.7, label=key)
+        plt.plot(hours, dual_dict[key], marker=marker,ms=8, linestyle=linestyle, alpha=0.7, label=key)
     # Graph features
     plt.xlabel('Hour of Day')
     plt.xticks(hours)
     plt.ylabel('Dual Value')
     plt.title(title)
     plt.grid(True, linestyle='--', alpha=0.5)
-    plt.legend()
+    plt.legend(loc="upper left", bbox_to_anchor=(1,1.07))
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")

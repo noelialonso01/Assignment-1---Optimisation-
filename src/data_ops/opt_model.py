@@ -132,8 +132,14 @@ class OptModel2:
         self.cons.load_max = {}
         self.cons.load_min = {}
         self.cons.deviation = {}
-        #self.cons.deviation_neg = {}
         self.cons.prod_min = {}
+        self.cons.SOC_min = {}
+        self.cons.SOC_max = {}
+        self.cons.charge_max = {}
+        self.cons.discharge_max = {}
+        self.cons.SOC_ini = {}
+        self.cons.SOC_fin = {}
+        self.cons.SOC_dynamics = {}
         self.T = self.data.T  # Time periods (0-23 hours)
 
 
@@ -169,7 +175,7 @@ class OptModel2:
                 for t in self.T
             )
         if self.question == "question_1c":
-            ### same as 1b i think?
+            ### same as 1b
             obj_fn = -gp.quicksum(
                 self._at(self.data.price, t)       * self.vars.v_import[t]
               + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
@@ -177,16 +183,31 @@ class OptModel2:
               + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
               + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
               + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
-              + self.data.alpha * self.vars.v_deviation[t] for t in self.T
+              + self.data.alpha * self.vars.v_deviation_pos[t]
+              + self.data.alpha * self.vars.v_deviation_neg[t]
+                for t in self.T
             )
+        if self.question == "question_2b":
+            obj_fn = -gp.quicksum(
+                self._at(self.data.price, t)       * self.vars.v_import[t]
+              + self._at(self.data.imp_tariff, t) * self.vars.v_import[t]
+              - self._at(self.data.price, t)       * self.vars.v_export[t]
+              + self._at(self.data.exp_tariff, t) * self.vars.v_export[t]
+              + self.data.excess_imp_tariff       * self.vars.v_imp_excess[t]
+              + self.data.excess_exp_tariff       * self.vars.v_exp_excess[t]
+              + self.data.alpha * self.vars.v_deviation_pos[t]
+              + self.data.alpha * self.vars.v_deviation_neg[t] for t in self.T
+                + self.data.pi * self.vars.v_battery_size)
+            pass
 
 
         self.model.setObjective(obj_fn, GRB.MAXIMIZE)
 
-    def _build(self, alpha: float = 5):
+    def _build(self, alpha: float = 5, pi: float = 2):
         ### variables are defined here, and denoted with v_
         self.data.alpha = alpha
-        v_load = self.model.addVars(self.T, lb=0.0, name=f"v_load")
+        self.data.pi = pi
+        v_load = self.model.addVars(self.T, lb=-GRB.INFINITY, name=f"v_load")
         v_prod = self.model.addVars(self.T, lb=-GRB.INFINITY, name="v_prod")
         v_import = self.model.addVars(self.T, lb=0.0, name="v_import")
         v_export = self.model.addVars(self.T, lb=0.0, name="v_export")
@@ -194,10 +215,10 @@ class OptModel2:
         v_exp_excess = self.model.addVars(self.T, lb=0.0, name="v_exp_excess")
         v_deviation_pos = self.model.addVars(self.T, lb=0.0, name="v_deviation_pos")
         v_deviation_neg = self.model.addVars(self.T, lb=0.0, name="v_deviation_neg")
-        v_SOC = self.model.addVars(self.T, lb=0.0, name="v_SOC")
+        v_SOC = self.model.addVars(self.T, lb=-GRB.INFINITY, name="v_SOC")
         v_E_charged = self.model.addVars(self.T, lb=0.0, name="v_E_charged")
         v_E_discharged = self.model.addVars(self.T, lb=0.0, name="v_E_discharged")
-
+        v_battery_size = self.model.addVar(lb=0.0, name="v_battery_size")
 
         # store variable handles
         self.vars.v_load = v_load
@@ -211,6 +232,7 @@ class OptModel2:
         self.vars.v_SOC = v_SOC
         self.vars.v_E_charged = v_E_charged
         self.vars.v_E_discharged = v_E_discharged
+        self.vars.v_battery_size = v_battery_size
 
         # constraints (store handles so we can read Pi and update RHS later)
         for i in self.T:
@@ -228,12 +250,8 @@ class OptModel2:
             for i in self.T:
                 self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
         if self.question == "question_1b":
-            print("Load profile is set to:", self.data.load_profile)
-            print("load max is", self.data.load_max)
             for i in self.T:
                 self.cons.deviation[i] = self.model.addConstr(v_load[i] - self.data.load_profile[i]*self.data.load_max == v_deviation_pos[i] - v_deviation_neg[i], name=f"deviation_{i}")
-                #self.cons.deviation_pos[i] = self.model.addConstr(v_load[i] - self.data.load_profile[i]*self.data.load_max - v_deviation_pos[i] >= 0 , name=f"deviation_pos{i}")
-                #self.cons.deviation_neg[i] = self.model.addConstr(-(v_load[i] - self.data.load_profile[i]*self.data.load_max) - v_deviation_neg[i] >= 0 , name=f"deviation_neg{i}")
                 self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
         if self.question == "question_1c":
             # intial and final SOC constraints, not for each hour
@@ -241,16 +259,30 @@ class OptModel2:
             self.cons.SOC_fin = self.model.addConstr(v_SOC[23] == self.data.SOC_ratio_fin*self.data.bat_capacity, name="SOC_fin")
             for i in self.T:
                 self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] + v_E_charged[i] - v_E_discharged[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
-                self.cons.deviation_pos[i] = self.model.addConstr(0 >= v_load[i] - self.data.load_profile[i]*self.data.load_max - v_deviation[i], name=f"deviation_pos_{i}")
-                self.cons.deviation_neg[i] = self.model.addConstr(0 >= -(v_load[i] - self.data.load_profile[i]*self.data.load_max) - v_deviation[i], name=f"deviation_neg_{i}")
-                self.cons.SOC_max = self.model.addConstr(0 <= self.data.bat_capacity - v_SOC[i], name=f"SOC_dynamics_{i}")
-                self.cons.charge_max = self.model.addConstr(0 <= self.data.max_charge_power_ratio*self.data.bat_capacity - v_E_charged[i], name=f"charge_max_{i}")
-                self.cons.discharge_max = self.model.addConstr(0 <= self.data.max_discharge_power_ratio*self.data.bat_capacity - v_E_discharged[i], name=f"discharge_max_{i}")
+                self.cons.deviation[i] = self.model.addLConstr(v_load[i] - self.data.load_profile[i]*self.data.load_max == v_deviation_pos[i] - v_deviation_neg[i], name=f"deviation_{i}")
+                self.cons.SOC_max[i] = self.model.addConstr( -(self.data.bat_capacity - v_SOC[i]) <= 0, name=f"SOC_dynamics_{i}")
+                self.cons.SOC_min[i] = self.model.addConstr(-v_SOC[i] <= 0, name=f"SOC_dynamics_{i}")
+                self.cons.charge_max[i] = self.model.addConstr(-(self.data.max_charge_power_ratio*self.data.bat_capacity - v_E_charged[i]) <= 0, name=f"charge_max_{i}")
+                self.cons.discharge_max[i] = self.model.addConstr(-(self.data.max_discharge_power_ratio*self.data.bat_capacity - v_E_discharged[i]) <= 0, name=f"discharge_max_{i}")
             for i in list(range(1,24,1)):
                 ### only does SOC dynamics for hours 1-23, as 0 is handled by initial SOC constraint
-                self.cons.SOC_dynamics = self.model.addConstr(v_SOC[i] == v_SOC[i-1] + (self.data.charge_eff*v_E_charged[i] - v_E_discharged[i]/self.data.discharge_eff), name=f"SOC_dynamics_{i}")
-                
-
+                self.cons.SOC_dynamics[i] = self.model.addConstr(v_SOC[i] == v_SOC[i-1] + (self.data.charge_eff*v_E_charged[i] - v_E_discharged[i]/self.data.discharge_eff), name=f"SOC_dynamics_{i}")
+        if self.question == "question_2b": 
+            # intial and final SOC constraints, not for each hour
+            self.cons.SOC_ini = self.model.addConstr(v_SOC[0] == self.data.SOC_ratio_ini*v_battery_size + (self.data.charge_eff*v_E_charged[0] - v_E_discharged[0]/self.data.discharge_eff), name="SOC_ini")
+            self.cons.SOC_fin = self.model.addConstr(v_SOC[23] == self.data.SOC_ratio_fin*v_battery_size, name="SOC_fin")
+            for i in self.T:
+                self.cons.power_balance[i] = self.model.addLConstr(v_load[i] - v_prod[i] + v_E_charged[i] - v_E_discharged[i] == v_import[i] - v_export[i], name=f"power_balance_{i}")
+                self.cons.deviation[i] = self.model.addLConstr(v_load[i] - self.data.load_profile[i]*self.data.load_max == v_deviation_pos[i] - v_deviation_neg[i], name=f"deviation_{i}")
+                self.cons.SOC_max[i] = self.model.addConstr( -(v_battery_size - v_SOC[i]) <= 0, name=f"SOC_dynamics_{i}")
+                self.cons.SOC_min[i] = self.model.addConstr(-v_SOC[i] <= 0, name=f"SOC_dynamics_{i}")
+                self.cons.charge_max[i] = self.model.addConstr(-(self.data.max_charge_power_ratio*v_battery_size - v_E_charged[i]) <= 0, name=f"charge_max_{i}")
+                self.cons.discharge_max[i] = self.model.addConstr(-(self.data.max_discharge_power_ratio*v_battery_size - v_E_discharged[i]) <= 0, name=f"discharge_max_{i}")
+            for i in list(range(1,24,1)):
+                ### only does SOC dynamics for hours 1-23, as 0 is handled by initial SOC constraint
+                self.cons.SOC_dynamics[i] = self.model.addConstr(v_SOC[i] == v_SOC[i-1] + (self.data.charge_eff*v_E_charged[i] - v_E_discharged[i]/self.data.discharge_eff), name=f"SOC_dynamics_{i}")
+            self
+            pass
         self._set_objective()
 
     def solve(self, verbose: bool = False):
@@ -294,13 +326,14 @@ class OptModel2:
             duals.emin_constraint = float(self.cons.emin_constraint.Pi)
         
         if self.question == "question_1c":
-            duals.SOC_ini = float(self.cons.SOC_ini.Pi)
-            duals.SOC_fin = float(self.cons.SOC_fin.Pi)
-            duals.SOC_max = np.array([self.cons.SOC_max.Pi for i in self.T], dtype=float)
-            duals.charge_max = np.array([self.cons.charge_max.Pi for i in self.T], dtype=float)
-            duals.discharge_max = np.array([self.cons.discharge_max.Pi for i in self.T], dtype=float)
-            duals.deviation_pos = np.array([self.cons.deviation_pos[i].Pi for i in self.T], dtype=float)
-            duals.deviation_neg = np.array([self.cons.deviation_neg[i].Pi for i in self.T], dtype=float)
+            duals.SOC_ini = np.array([float(self.cons.SOC_ini.Pi)] + [np.nan]*23, dtype=float)
+            duals.SOC_fin = np.array([np.nan]*23 + [float(self.cons.SOC_fin.Pi)], dtype=float)
+            duals.SOC_max = np.array([self.cons.SOC_max[i].Pi for i in self.T], dtype=float)
+            duals.SOC_min = np.array([self.cons.SOC_min[i].Pi for i in self.T], dtype=float)
+            duals.SOC_dynamics = [None] + [self.cons.SOC_dynamics[i].Pi for i in range(1, 24)]
+            duals.charge_max = np.array([self.cons.charge_max[i].Pi for i in self.T], dtype=float)
+            duals.discharge_max = np.array([self.cons.discharge_max[i].Pi for i in self.T], dtype=float)
+            duals.deviation = np.array([self.cons.deviation[i].Pi for i in self.T], dtype=float)
             
         self.results.duals = duals
         return self.results
@@ -343,8 +376,7 @@ class OptModel2:
         elif data_name == "load_profile":
             for i in self.T:
                 # Rebuild the RHS if you changed load_profile
-                self.cons.deviation_pos[i].RHS = 0
-                self.cons.deviation_neg[i].RHS = 0
+                self.cons.deviation[i].RHS = 0
 
         self.model.update()
     

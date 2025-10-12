@@ -52,7 +52,7 @@ class RunnerQ1a:
         plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)a)DualResultsOGCosts", show=True, title="Dual Results 1)a) (original cost structure)")
 
         variable_name = "price" 
-        scenario_price_profile = [1.1, 1.05, -1.0, -0.9, -0.85, 1.01, 1.05, 1.2, 1.4, 1.6,
+        scenario_price_profile = [1.1, 1.05, 1.0, 0.9, -0.85, -1.01, 1.05, 1.2, 1.4, 1.6,
                                 1.5, 1.1, 1.05, 1.0, 0.95, 1.0, 1.2, 1.5, 2.1, 2.5,
                                 2.2, 1.8, 1.4, 1.2]
         model.update_data(variable_name, scenario_price_profile)

@@ -33,31 +33,28 @@ class RunnerQ1b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            "Deviation Pos (kWh)": results.v_deviation_pos,
-            "Deviation Neg (kWh)": results.v_deviation_neg,
-            #"Price (DKK/kWh)": results.prices
+            "Deviation Up (kWh)": results.v_deviation_pos,
+            "Deviation Down (kWh)": results.v_deviation_neg,
         }, index=pd.Index(range(24), name="Hour"))
         deviations_pos = results.v_deviation_pos
         deviations_neg = results.v_deviation_neg
         deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
         obj_value = results.obj
-        expenditure = -(obj_value - sum(deviations[i]*10 for i in range(len(deviations))))
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=10", show=True, show_price_line=True,
-                                   line_label="Deviation Pos (kWh)",title=f"Primal Results Q1)b) pos line (w=10), daily expenditure = {expenditure:.2f} DKK")
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=10", show=True, show_price_line=True,
-                                   line_label="Deviation Neg (kWh)",title=f"Primal Results Q1)b) neg line (w=10), daily expenditure = {expenditure:.2f} DKK")
+        expenditure = -obj_value - sum(deviations[i]*5 for i in range(len(deviations)))
+        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=5", show=True, show_price_line=True,
+                                   line_label="Deviation Down (kWh)",title=f"Primal Results Q1)b) (w=5), daily expenditure = {expenditure:.2f} DKK")
 
         dual_results_df = pd.DataFrame({
             "Load UB Dual (α_up)": results.duals.load_max,
             "Power Balance Dual (λ)": results.duals.power_balance,
             "Production UB Dual (μ_up) ": results.duals.prod_max,
-            "Deviation Dual (η+) ": results.duals.deviation,
-            #"Deviation Negative Dual (η-)": results.duals.deviation_neg,
+            "Deviation Dual (η) ": results.duals.deviation,
+            "Production LB dual (μ_low)": results.duals.prod_min,
         }, index=pd.Index(range(24), name="Hour"))
-        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)DualResultsw=10", show=True, title="Dual Results 1)b) (w=10)")
+        plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)DualResultsw=5", show=True, title="Dual Results 1)b) (w=5)")
 
         variable_name = 'alpha'
-        alpha = 0.5
+        alpha = 2
         model.update_data(variable_name, alpha)
         results = model.solve(verbose=True)
         results_df = pd.DataFrame({
@@ -67,35 +64,37 @@ class RunnerQ1b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            "Deviation Pos (kWh)": results.v_deviation_pos,
-            "Deviation Neg (kWh)": results.v_deviation_neg,
-            #"Price (DKK/kWh)": results.prices
+            "Deviation Up (kWh)": results.v_deviation_pos,
+            "Deviation Down (kWh)": results.v_deviation_neg,
         }, index=pd.Index(range(24), name="Hour"))
         deviations_pos = results.v_deviation_pos
         deviations_neg = results.v_deviation_neg
         deviations = [deviations_pos[i] + deviations_neg[i] for i in range(len(deviations_pos))]
+        print(deviations)
         obj_value = results.obj
-        expenditure = -(obj_value - sum(deviations[i]*alpha for i in range(len(deviations))))
+        expenditure = -obj_value - sum(deviations[i]*alpha for i in range(len(deviations)))
         plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=2", show=True, show_price_line=True,
-                                   line_label="Deviation Pos (kWh)",title=f"Primal Scenario Results pos line Q1)b) (w=2), daily expenditure = {expenditure:.2f} DKK")
-        plot_all_columns_one_graph(results_df, save_path=Path(self.path)/"figures"/"1)b)Primalw=2", show=True, show_price_line=True,
-                                   line_label="Deviation Neg (kWh)",title=f"Primal Scenario Results neg line Q1)b) (w=2), daily expenditure = {expenditure:.2f} DKK")
+                                   line_label="Deviation Down (kWh)",title=f"Primal Scenario Results neg line Q1)b) (w=2), daily expenditure = {expenditure:.2f} DKK")
 
         dual_results_df = pd.DataFrame({
             "Load UB Dual (α_up)": results.duals.load_max,
             "Power Balance Dual (λ)": results.duals.power_balance,
             "Production UB Dual (μ_up) ": results.duals.prod_max,
-            "Deviation Dual (η+) ": results.duals.deviation,
-            #"Deviation Negative Dual (η-)": results.duals.deviation_neg,
+            "Deviation Dual (η) ": results.duals.deviation,
+            "Production LB dual (μ_low)": results.duals.prod_min,
         }, index=pd.Index(range(24), name="Hour"))
         plot_all_duals(dual_results_df, save_path=Path(self.path)/"figures"/"1)b)DualResultsw=2", show=True, title="Dual Scenario Results 1)b) (w=2)")
         
     pass
 
+
+
+
+
+
+
+"""
     def question1_b_v_varying_alpha(self):
-        """
-        Vary alpha (defines how strongly consumer wants to keep to load profile)
-        """
         data = DataProcessor(input_path=self.path, question=self.question).getCoefficients()
         model = OptModel2(data, self.question)
         model._build()
@@ -105,11 +104,6 @@ class RunnerQ1b:
                          "Scenario 7 (w=10)": 10}
         
         variable_name = 'alpha'
-        """
-        Extracting the deviation values and expenditure for different alphas
-        Want to plot deviation vs time for different alpha values (each one line)
-        Also an expenditure sensitivity plot as usual
-        """
         deviations_columns_dict = {}
         expenditure_list = []
         deviation_pos_dual_dict = {}
@@ -140,3 +134,4 @@ class RunnerQ1b:
         plot_dual_scenarios(deviation_pos_dual, save_path=Path(self.path)/"figures"/"1)b)DualValuesDevPos", title = "Deviation Positive dual values for the different weight scenarios")
         plot_dual_scenarios(deviation_neg_dual, save_path=Path(self.path)/"figures"/"1)b)DualValuesDevNeg", title = "Deviation Negative dual values for the different weight scenarios")
         pass
+"""

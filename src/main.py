@@ -12,6 +12,7 @@ Suggested structure:
 from runner.runnerQ1a import RunnerQ1a
 from runner.runnerQ1b import RunnerQ1b
 from runner.runnerQ1c import RunnerQ1c
+from runner.runnerQ2b import RunnerQ2b
 
 import pandas as pd
 
@@ -24,12 +25,14 @@ path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimis
 #Question_1a = RunnerQ1a(path)
 #Question_1a.question1_a()
 
-Question_1b = RunnerQ1b(path)
-Question_1b.question1_b()
-#Question_1b.question1_b_v_varying_alpha()
+#Question_1b = RunnerQ1b(path)
+#Question_1b.question1_b()
 
 #Question_1c = RunnerQ1c(path)
-#Question_1c.question1_c_iv()
+#Question_1c.question1_c()
+
+Question_2b = RunnerQ2b(path)
+Question_2b.question1_c()
 
 
 
