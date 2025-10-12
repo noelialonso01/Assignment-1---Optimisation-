@@ -40,64 +40,22 @@ class DataLoader:
         pass
 
     def _load_dataset(self, question_name: str):
+        """
+        loads all relevant data for a given question from structured CSV and json files in the input_path directory.
+        """
         self.question = question_name
         raw_data = load_dataset(question_name, self.input_path)
         for key, value in raw_data.items():
             setattr(self, key, pd.DataFrame(value))
-
-        """Helper function to load all CSV or json files, using the appropriate method based on file extension.
-        
-        example usage: 
-        call the load_dataset() function from utils.py to load all files in the input_path directory
-        save all data as class attributes (e.g. self.demand, self.wind, etc.), structured as pandas DataFrames or Series (or other format as prefered)
-        """
         return raw_data
 
 
     def _load_data_file(self, question_name: str, file_name: str):
+        """
+        loads a specific data file for a given question from the input_path directory."""
         self.question = question_name
         self.file_name = file_name
         raw_data = load_datafile(file_name, question_name, self.input_path)
         for key, value in raw_data.items():
             setattr(self, key, pd.DataFrame(value))
-
-        """
-        Placeholder function 
-        Helper function to load a specific CSV or json file, using the appropriate method based on file extension.. Raises FileNotFoundError if missing.
-        
-        example usage: 
-        define and call a load_data_file() function from utils.py to load a specific file in the input_path directory
-        save all data as class attributes (e.g. self.demand, self.wind, etc.), structured as pandas DataFrames or Series (or other format as prefered)"""
         return raw_data
-
-    def load_aux_data(self, question_name: str, filename: str):
-        """
-        Placeholder Helper function to Load auxiliary metadata for the scenario/question from a YAML/json file or other formats
-        
-        Example application: 
-        define and call a load_aux_data() function from utils.py to load a specific auxiliary file in the input_path directory
-        Save the content as s class attributes, in a dictionary, pd datframe or other: self.aux_data
-        Attach key values as class attributes (flattened).
-        """
-        pass
-
-
-"""
-When running, define path and question as inputs. Path should be:
-
-"""
-
-
-# Example usage (do not include un-escaped Windows paths inside triple-quoted strings):
-# path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
-# question = "question_1a"
-# data = DataLoader(input_path=path, question=question)
-# loaded_data = data._load_dataset(question)
-# print(loaded_data)
-#
-# path = r"C:\Users\inesm\Desktop\Optimization\Assignment-1---Optimisation-\data"
-# question = "question_1a"
-# data = DataLoader(input_path=path, question=question)
-# filename = "consumer_params.json"
-# loaded_data = data._load_data_file(question, filename)
-# print(loaded_data)

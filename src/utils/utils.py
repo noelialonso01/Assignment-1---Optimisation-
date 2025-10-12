@@ -50,6 +50,7 @@ Now we have some plotting functions
 def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, show: bool = True, 
                                show_price_line = True, title: str = "Stacked flows vs time (with energy price)",
                                line_label: str = "Price (DKK/kWh)"):
+    """Plots the primals in a stacked bar chart, with an optional line for price, deviation or battery SOC."""
     if show_price_line == True:
         price_ser = df.pop(line_label)
         if line_label == "Deviation Down (kWh)":
@@ -137,6 +138,7 @@ def plot_all_columns_one_graph(df: pd.DataFrame, save_path: str | None = None, s
 
 
 def plot_price_scenarios(variable_dict, save_path: str | None = None, show: bool = True, title: str = "Price Scenarios for different price profiles"):
+    """Plots the price scenarios in a line chart."""
     hours = np.arange(24)
     plt.figure(figsize=(12, 6))
 
@@ -160,8 +162,8 @@ def plot_price_scenarios(variable_dict, save_path: str | None = None, show: bool
         plt.close()
     
 
-
 def plot_all_duals(dual_dict, save_path: str | None = None, show: bool = True, title: str = "Dual values for the different price scenarios"):
+    """Plots the duals in a line chart."""
     hours = np.arange(24)
     plt.figure(figsize=(12, 6))
     markers = ['o', 'x', 's', '^', 'v', '*', 'D', 'p', '+', '>', 'h']
@@ -188,6 +190,9 @@ def plot_all_duals(dual_dict, save_path: str | None = None, show: bool = True, t
 def plot_all_columns_one_graph_2b(df: pd.DataFrame, save_path: str | None = None, show: bool = True, 
                                show_price_line = True, title: str = "Stacked flows vs time (with energy price)",
                                line_label: str = "Price (DKK/kWh)"):
+    """Plots the primals in a stacked bar chart, with an optional line for price, deviation or battery SOC.
+    This is only used for question 2b, where the y limit must vary based on battery size.
+    """
     if show_price_line == True:
         price_ser = df.pop(line_label)
         if line_label == "Deviation Down (kWh)":

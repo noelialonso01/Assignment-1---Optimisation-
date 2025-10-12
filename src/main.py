@@ -22,17 +22,37 @@ from pathlib import Path
 """Here you need to set your path to the data folder to be able to run the code below"""
 path = r"C:\Users\alex\OneDrive\Desktop\DTU\Optimistation\Assignment-1---Optimisation-\data"
 
-#Question_1a = RunnerQ1a(path)
-#Question_1a.question1_a()
+"""
+Please uncomment the relevant question you want to run below. When you run the code, it will generate and save the relevant plots in the figures folder.
+So you can close them all and then view the figures afterwards if yu prefer
+"""
 
-#Question_1b = RunnerQ1b(path)
-#Question_1b.question1_b()
+### Question 1a
+"""
+Question_1a = RunnerQ1a(path)
+Question_1a.question1_a()
+"""
 
-#Question_1c = RunnerQ1c(path)
-#Question_1c.question1_c()
+### Question 1b
+"""
+Question_1b = RunnerQ1b(path)
+Question_1b.question1_b()
+"""
 
+
+### Question 1c
+"""
+Question_1c = RunnerQ1c(path)
+Question_1c.question1_c()
+"""
+
+
+### Question 2b
+"""
 Question_2b = RunnerQ2b(path)
 Question_2b.question2_b()
+"""
+
 
 
 

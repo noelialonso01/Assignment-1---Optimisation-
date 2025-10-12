@@ -8,7 +8,7 @@ from gurobipy import GRB
 from data_ops.data_loader import DataLoader
 
 class InputData:
-
+    """Class to hold input data for the optimization model."""
     def __init__(
         self,
         price: list[float],
@@ -66,6 +66,7 @@ class DataProcessor():
         self.data_loader = data
 
     def getCoefficients(self):
+        """Extract and process data from JSON files to create InputData instance."""
         appliance_params = self.data_loader._load_data_file(self.question, "appliance_params.json")
         appliance_params_unwrapped = appliance_params["appliance_params"]
 
@@ -120,7 +121,6 @@ class DataProcessor():
                excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, pmin, SOC_ratio_ini, 
                SOC_ratio_fin, bat_capacity, max_charge_power_ratio, max_discharge_power_ratio, charge_eff, discharge_eff)
         else:
-        #print("emin is:", emin, "load max is:", load_max, "load min is:", load_min, "pmax is:", pmax, "pmaxhourly is:", pmaxhourly, "price is:", price, "imp tariff is:", imp_tariff, "exp tariff is:", exp_tariff, "max import is:", max_import, "max export is:", max_export, "excess imp tariff is:", excess_imp_tariff, "excess exp tariff is:", excess_exp_tariff,)
             return InputData(price, imp_tariff, exp_tariff, max_import, max_export, excess_imp_tariff,
                excess_exp_tariff, pmaxhourly,  emin, load_min, load_max, load_profile, pmin)
     
@@ -280,6 +280,7 @@ class OptModel2:
                 self.cons.SOC_dynamics[i] = self.model.addConstr(v_SOC[i] == v_SOC[i-1] + (self.data.charge_eff*v_E_charged[i] - v_E_discharged[i]/self.data.discharge_eff), name=f"SOC_dynamics_{i}")
         if self.question == "question_2b": 
             # intial and final SOC constraints, not for each hour
+            # only difference to 1c is that battery size is now a variable
             self.cons.SOC_ini = self.model.addConstr(v_SOC[0] == self.data.SOC_ratio_ini*v_battery_size + (self.data.charge_eff*v_E_charged[0] - v_E_discharged[0]/self.data.discharge_eff), name="SOC_ini")
             self.cons.SOC_fin = self.model.addConstr(v_SOC[23] == self.data.SOC_ratio_fin*v_battery_size, name="SOC_fin")
             for i in self.T:
@@ -333,7 +334,6 @@ class OptModel2:
         duals.power_balance = np.array([self.cons.power_balance[i].Pi for i in self.T], dtype=float)
         if self.question == "question_1b":
             duals.deviation = np.array([self.cons.deviation[i].Pi for i in self.T], dtype=float)
-            #duals.deviation_neg = np.array([self.cons.deviation_neg[i].Pi for i in self.T], dtype=float)
         # single daily energy constraint -> scalar
         if self.question == "question_1a":
             duals.emin_constraint = float(self.cons.emin_constraint.Pi)

@@ -21,6 +21,8 @@ class RunnerQ2b:
         self.path = path
         self.question = "question_2b"
     def question2_b(self):
+        """Run the workflow for question 2b."""
+        """Initially run with alpha = 5 and original prices"""
         data = DataProcessor(input_path=self.path, question=self.question).getCoefficients()
         model = OptModel2(data, self.question)
         model._build()
@@ -32,9 +34,6 @@ class RunnerQ2b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            #"Price (DKK/kWh)": results.prices,
-            #"Charged to battery (kWh)": results.v_E_charged,
-            #"Discharged from battery (kWh)": results.v_E_discharged,
             "Battery SOC (kWh)": results.v_SOC
         }, index=pd.Index(range(24), name="Hour"))
         
@@ -64,9 +63,6 @@ class RunnerQ2b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            #"Price (DKK/kWh)": results.prices,
-            #"Charged to battery (kWh)": results.v_E_charged,
-            #"Discharged from battery (kWh)": results.v_E_discharged,
             "Battery SOC (kWh)": results.v_SOC
         }, index=pd.Index(range(24), name="Hour"))
         
@@ -97,9 +93,6 @@ class RunnerQ2b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            #"Price (DKK/kWh)": results.prices,
-            #"Charged to battery (kWh)": results.v_E_charged,
-            #"Discharged from battery (kWh)": results.v_E_discharged,
             "Battery SOC (kWh)": results.v_SOC
         }, index=pd.Index(range(24), name="Hour"))
         
@@ -119,6 +112,7 @@ class RunnerQ2b:
         variable_name = "alpha" 
         alpha = 2
         data = DataProcessor(input_path=self.path, question=self.question).getCoefficients()
+        """Reset model to original prices"""
         model2 = OptModel2(data, self.question)
         model2._build()
         model2.update_data(variable_name, alpha)
@@ -131,9 +125,6 @@ class RunnerQ2b:
             "Export": results.v_export,
             "Import Excess": results.v_imp_excess,
             "Export Excess": results.v_exp_excess,
-            #"Price (DKK/kWh)": results.prices,
-            #"Charged to battery (kWh)": results.v_E_charged,
-            #"Discharged from battery (kWh)": results.v_E_discharged,
             "Battery SOC (kWh)": results.v_SOC
         }, index=pd.Index(range(24), name="Hour"))
         
